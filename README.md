@@ -14,6 +14,15 @@ Funciona no navegador do celular, pode ser instalado na tela inicial e funciona 
 - **Relatórios** por período: valor perdido, valor recuperado em devolução, unidades salvas, taxa de aproveitamento e produtos com mais perda.
 - **Alertas**: notificação diária ao abrir o app quando há itens vencidos ou críticos. Os prazos são configuráveis.
 - **Backup**: exporta e restaura em JSON e exporta lotes em CSV (abre no Excel).
+- **Importar nota fiscal (NF-e XML)** do fornecedor: produtos, quantidade e custo vêm da nota.
+  - Lote e validade vêm preenchidos quando a nota traz o grupo `rastro`; senão, basta digitar a data.
+  - Converte caixa em unidades (ex.: 2 CX = 24 UN) usando a unidade tributável da nota.
+  - Avisa quando a mesma nota é importada duas vezes e guarda o fornecedor e o nº da NF no lote (útil para devolução).
+- **Importar planilha** (Excel `.xlsx` ou CSV, inclusive CSV "ANSI" de sistemas antigos):
+  - Reconhece as colunas automaticamente (EAN, descrição, grupo, custo, validade, estoque…), com ajuste manual.
+  - Aceita datas `31/12/2026`, `31/12/26`, `2026-12-31`, `12/2026` (último dia do mês) e datas do Excel.
+  - Se houver validade e quantidade, cria os lotes também.
+- Arquivos para testar em `exemplos/` (nota fiscal fictícia e modelo de planilha).
 - Dados de exemplo, para demonstração.
 
 ## Como rodar
@@ -35,6 +44,8 @@ GitHub Pages, Netlify ou Vercel, todos gratuitos para sites estáticos.
 | `index.html` | Telas (painel, lotes, novo, relatórios, ajustes) |
 | `styles.css` | Visual mobile-first, com tema claro e escuro |
 | `app.js` | Lógica, armazenamento local, leitor de código, relatórios |
+| `importar.js` | Importação de NF-e (XML) e planilhas (CSV/Excel) |
+| `exemplos/` | Nota fiscal fictícia e modelo de planilha para testar |
 | `sw.js` | Cache offline e clique na notificação |
 | `manifest.webmanifest` | Instalação como app |
 
@@ -49,6 +60,7 @@ GitHub Pages, Netlify ou Vercel, todos gratuitos para sites estáticos.
 1. **Backend + login** (ex.: Supabase/Firebase): vários usuários por loja, sincronização e backup automático.
 2. **Push diário** pelo servidor, mesmo com o app fechado.
 3. **Leitura da data por foto (OCR)**, para cadastrar mais rápido.
-4. **Base de produtos por EAN** (ex.: Cosmos/Open Food Facts), para preencher o nome automaticamente.
-5. **Multi-loja**, perfis (gerente/repositor) e relatório mensal em PDF.
-6. Monetização: assinatura mensal por loja (plano grátis limitado em nº de lotes).
+4. **Receber a NF-e automaticamente** (e-mail do fornecedor ou consulta pela chave/CNPJ via serviço de terceiros), sem precisar baixar o XML.
+5. **Base de produtos por EAN** (ex.: Cosmos/Open Food Facts), para preencher o nome automaticamente.
+6. **Multi-loja**, perfis (gerente/repositor) e relatório mensal em PDF.
+7. Monetização: assinatura mensal por loja (plano grátis limitado em nº de lotes).

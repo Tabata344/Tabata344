@@ -10,6 +10,7 @@ const DEFAULT_DB = {
   products: {},   // id -> { id, barcode, name, category, cost }
   lots: [],       // { id, productId, lot, expiry: 'YYYY-MM-DD', qty, location, createdAt }
   movements: [],  // { id, lotId, productId, type, qty, unitCost, date, note }
+  imports: [],    // notas fiscais importadas: { key, number, supplier, date, importedAt, lots }
   settings: { storeName: '', criticalDays: 7, warnDays: 30, lastNotified: '' },
 };
 
@@ -80,6 +81,7 @@ function normalizeDb(raw) {
     products: raw.products || {},
     lots: raw.lots || [],
     movements: raw.movements || [],
+    imports: raw.imports || [],
     settings: { ...DEFAULT_DB.settings, ...(raw.settings || {}) },
   };
 }
@@ -109,6 +111,7 @@ function lotItemHTML(l) {
     p.barcode && `EAN ${esc(p.barcode)}`,
     l.lot && `Lote ${esc(l.lot)}`,
     l.location && esc(l.location),
+    l.supplier && esc(l.supplier) + (l.invoice ? ` (NF ${esc(l.invoice)})` : ''),
   ].filter(Boolean).join(' · ');
   return `
     <li class="lot ${l.status}">
@@ -170,12 +173,16 @@ function renderLotes() {
     : '<li class="empty">Nenhum lote encontrado.</li>';
 }
 
-function renderNovo() {
+function fillDatalists() {
   const products = Object.values(db.products);
   $('#product-names').innerHTML = products.map((p) => `<option value="${esc(p.name)}">`).join('');
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
   $('#categories').innerHTML = uniq(products.map((p) => p.category)).map((c) => `<option value="${esc(c)}">`).join('');
   $('#locations').innerHTML = uniq(db.lots.map((l) => l.location)).map((c) => `<option value="${esc(c)}">`).join('');
+}
+
+function renderNovo() {
+  fillDatalists();
   const exp = $('#form-novo').expiry;
   exp.min = addDaysISO(todayISO(), -365);
 }
@@ -240,23 +247,24 @@ function renderAjustes() {
 
 const RENDERERS = {
   painel: renderPainel, lotes: renderLotes, novo: renderNovo,
-  relatorios: renderRelatorios, ajustes: renderAjustes,
+  relatorios: renderRelatorios, ajustes: renderAjustes, importar: renderImportar,
 };
 
 function route() {
   const [view = 'painel', arg] = location.hash.replace(/^#/, '').split('/');
   const name = RENDERERS[view] ? view : 'painel';
   if (name === 'lotes' && arg) lotFilter = arg;
-  $$('.view').forEach((v) => { v.hidden = v.id !== `view-${name}`; });
-  $$('.tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === name));
-  RENDERERS[name]();
+  $$('#app > .view').forEach((v) => { v.hidden = v.id !== `view-${name}`; });
+  const tab = name === 'importar' ? 'novo' : name;
+  $$('.tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
+  RENDERERS[name](arg);
   $('#store-name').textContent = db.settings.storeName || 'Controle de validade';
   window.scrollTo(0, 0);
 }
 
 function rerender() {
-  const view = (location.hash.replace(/^#/, '').split('/')[0]) || 'painel';
-  (RENDERERS[view] || renderPainel)();
+  const [view = 'painel', arg] = location.hash.replace(/^#/, '').split('/');
+  (RENDERERS[view] || renderPainel)(arg);
 }
 
 /* ---------- cadastro ---------- */
@@ -277,6 +285,16 @@ function fillFromProduct(p) {
   f.cost.value = p.cost ?? '';
   $('#product-hint').textContent = 'Produto já cadastrado — dados preenchidos.';
   f.expiry.focus();
+}
+
+/** Cria um lote, ou soma ao lote igual (mesmo produto, lote, validade e local). */
+function addLot({ productId, expiry, qty, lot = '', location = '', supplier = '', invoice = '' }) {
+  const existing = db.lots.find((l) => l.productId === productId && l.expiry === expiry
+    && (l.lot || '') === lot && (l.location || '') === location && l.qty > 0);
+  if (existing) { existing.qty += qty; return existing; }
+  const created = { id: uid(), productId, lot, expiry, qty, location, supplier, invoice, createdAt: todayISO() };
+  db.lots.push(created);
+  return created;
 }
 
 function onBarcodeChange() {
@@ -306,11 +324,7 @@ function onSubmitNovo(e) {
 
   const lotCode = f.lot.value.trim();
   const location = f.location.value.trim();
-  // Mesmo produto + lote + validade + local: soma a quantidade
-  const existing = db.lots.find((l) => l.productId === product.id && l.expiry === expiry
-    && (l.lot || '') === lotCode && (l.location || '') === location && l.qty > 0);
-  if (existing) existing.qty += qty;
-  else db.lots.push({ id: uid(), productId: product.id, lot: lotCode, expiry, qty, location, createdAt: todayISO() });
+  addLot({ productId: product.id, expiry, qty, lot: lotCode, location });
   saveDb();
 
   const days = daysUntil(expiry);
@@ -523,6 +537,7 @@ function loadDemo() {
 /* ---------- eventos ---------- */
 function bind() {
   window.addEventListener('hashchange', route);
+  bindImport();
 
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-baixa]');

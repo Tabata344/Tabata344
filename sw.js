@@ -1,10 +1,11 @@
 // Service worker: deixa o app funcionando offline.
-const CACHE = 'validade-certa-v1';
+const CACHE = 'validade-certa-v2';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './importar.js',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',
@@ -41,7 +42,7 @@ self.addEventListener('fetch', (e) => {
         })
         .catch(() => caches.match(req, { ignoreSearch: true }).then((r) => r || caches.match('./index.html'))),
     );
-  } else if (url.hostname === 'cdn.jsdelivr.net') {
+  } else if ((url.hostname === 'cdn.jsdelivr.net' || url.hostname === 'cdnjs.cloudflare.com')) {
     e.respondWith(
       caches.match(req).then((cached) => cached || fetch(req).then((res) => {
         const copy = res.clone();

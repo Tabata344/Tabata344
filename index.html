@@ -49,6 +49,16 @@
 
     <!-- Novo lote -->
     <section id="view-novo" class="view" hidden>
+      <div class="panel import-cta">
+        <div>
+          <h2>Importar em lote</h2>
+          <p class="muted small">Pela nota fiscal do fornecedor ou pela planilha do seu sistema.</p>
+        </div>
+        <div class="row wrap">
+          <a class="btn secondary" href="#importar/nfe">🧾 Nota fiscal (XML)</a>
+          <a class="btn secondary" href="#importar/planilha">📄 Planilha</a>
+        </div>
+      </div>
       <form id="form-novo" class="panel form" autocomplete="off">
         <h2>Cadastrar lote</h2>
         <label>Código de barras
@@ -92,6 +102,41 @@
           <button type="submit" class="btn">Salvar lote</button>
         </div>
       </form>
+    </section>
+
+    <!-- Importar -->
+    <section id="view-importar" class="view" hidden>
+      <div class="chips" id="import-tabs">
+        <a class="chip" href="#importar/nfe" data-t="nfe">🧾 Nota fiscal (XML)</a>
+        <a class="chip" href="#importar/planilha" data-t="planilha">📄 Planilha</a>
+      </div>
+
+      <div id="import-nfe" class="view">
+        <div class="panel form">
+          <h2>Importar nota fiscal (NF-e)</h2>
+          <p class="muted small">Use o arquivo <b>XML</b> da nota que o fornecedor envia por e-mail (ou baixe no portal da SEFAZ / com seu contador).
+            Produtos, quantidades e custo vêm da nota. Lote e validade vêm preenchidos quando o fornecedor informa; senão, você só digita a data.</p>
+          <label class="btn file">Escolher XML da nota
+            <input type="file" id="nfe-file" accept=".xml,text/xml,application/xml" multiple hidden>
+          </label>
+          <a class="small" href="exemplos/nota-fiscal-exemplo.xml" download>Baixar uma nota de exemplo para testar</a>
+        </div>
+        <div id="nfe-preview" class="view"></div>
+        <div class="panel" id="nfe-history"></div>
+      </div>
+
+      <div id="import-planilha" class="view" hidden>
+        <div class="panel form">
+          <h2>Importar planilha</h2>
+          <p class="muted small">Excel (.xlsx) ou CSV exportado do seu sistema de vendas. Basta ter a coluna com o <b>nome do produto</b>;
+            código de barras, categoria e custo são opcionais. Se a planilha tiver <b>validade e quantidade</b>, os lotes também são criados.</p>
+          <label class="btn file">Escolher planilha
+            <input type="file" id="sheet-file" accept=".csv,.txt,.xlsx,.xls" hidden>
+          </label>
+          <a class="small" href="exemplos/modelo-planilha.csv" download>Baixar modelo de planilha</a>
+        </div>
+        <div id="sheet-preview" class="view"></div>
+      </div>
     </section>
 
     <!-- Relatórios -->
@@ -204,6 +249,7 @@
 
   <div id="toast" role="status" aria-live="polite"></div>
 
+  <script src="importar.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
