@@ -342,13 +342,52 @@ function findProductByName(name) {
 
 function fillFromProduct(p) {
   const f = $('#form-novo');
-  if (!p) { $('#product-hint').textContent = ''; return; }
+  if (!p) { $('#product-hint').textContent = ''; hideLastLot(); return; }
   f.name.value = p.name;
   if (!f.barcode.value && p.barcode) f.barcode.value = p.barcode;
   f.category.value = p.category || '';
   f.cost.value = p.cost ?? '';
   $('#product-hint').textContent = 'Produto já cadastrado — dados preenchidos.';
+  showLastLot(p.id);
   f.expiry.focus();
+}
+
+/* Sugere o lote e a validade da última entrada do produto (não preenche sozinho,
+ * para evitar salvar uma validade antiga por engano). */
+function lastLotOf(productId) {
+  let last = null;
+  db.lots.forEach((l) => {
+    if (l.deleted || l.productId !== productId) return;
+    if (!last || (l.createdAt || '') >= (last.createdAt || '')) last = l;
+  });
+  return last;
+}
+
+function showLastLot(productId) {
+  const box = $('#last-lot');
+  const l = lastLotOf(productId);
+  if (!l || (!l.lot && !l.expiry)) { hideLastLot(); return; }
+  const parts = [l.lot && `lote <b>${esc(l.lot)}</b>`, l.expiry && `validade <b>${fmtDate(l.expiry)}</b>`].filter(Boolean);
+  box.innerHTML = `<span>Última entrada: ${parts.join(' · ')}</span>
+    <button type="button" class="btn small secondary" id="btn-last-lot">Usar</button>`;
+  box.dataset.lot = l.lot || '';
+  box.dataset.expiry = l.expiry || '';
+  box.hidden = false;
+}
+
+function hideLastLot() {
+  const box = $('#last-lot');
+  if (box) { box.hidden = true; box.innerHTML = ''; }
+}
+
+function useLastLot() {
+  const box = $('#last-lot');
+  const f = $('#form-novo');
+  if (box.dataset.lot) f.lot.value = box.dataset.lot;
+  if (box.dataset.expiry) { f.expiry.value = fmtDate(box.dataset.expiry); updateExpiryHint(); }
+  hideLastLot();
+  f.qty.focus();
+  f.qty.select();
 }
 
 /** Cria um lote, ou soma ao lote igual (mesmo produto, lote, validade e local). */
@@ -370,11 +409,22 @@ function addLot({ productId, expiry, qty, lot = '', location = '', supplier = ''
   return created;
 }
 
+let formCode = ''; // código do produto que está no formulário agora
+
 function onBarcodeChange() {
-  const code = $('#form-novo').barcode.value.trim();
+  const f = $('#form-novo');
+  const code = f.barcode.value.trim();
+  if (code.length > 14 && parseGS1(code)) { applyScannedCode(code); return; }
+  if (code !== formCode) {
+    // outro produto: validade e lote do anterior não valem mais
+    formCode = code;
+    f.expiry.value = '';
+    f.lot.value = '';
+    updateExpiryHint();
+  }
   const p = findProductByBarcode(code);
   if (p) fillFromProduct(p);
-  else $('#product-hint').textContent = code ? 'Produto novo — preencha o nome.' : '';
+  else { $('#product-hint').textContent = code ? 'Produto novo — preencha o nome.' : ''; hideLastLot(); }
 }
 
 function onSubmitNovo(e) {
@@ -408,6 +458,8 @@ function onSubmitNovo(e) {
   f.location.value = location;
   f.qty.value = 1;
   $('#product-hint').textContent = '';
+  hideLastLot();
+  formCode = '';
   renderNovo();
   f.barcode.focus();
 }
@@ -461,6 +513,122 @@ function onDeleteLot() {
 /* ---------- leitor de código de barras ---------- */
 let scanStop = null;
 
+/* ---------- códigos GS1 (DataMatrix, GS1-128, QR) ----------
+ * Além do código de barras comum, muitos produtos (todos os medicamentos e
+ * cada vez mais alimentos) trazem um código 2D com produto, lote e validade:
+ *   (01) GTIN  (17) validade AAMMDD  (10) lote  (21) série  (15) consumir até
+ */
+const GS = '\x1d';
+const GS1_FIXED = {
+  '00': 18, '01': 14, '02': 14, '03': 14, '11': 6, '12': 6, '13': 6, '15': 6, '16': 6, '17': 6, '20': 2,
+};
+const GS1_VAR = { '10': 20, '21': 20, '22': 20, '30': 8, '37': 8, '90': 30, '91': 90, '92': 90, '93': 90, '94': 90, '95': 90, '96': 90, '97': 90, '98': 90, '99': 90 };
+const GS1_VAR3 = { '240': 30, '241': 30, '250': 30, '251': 30, '400': 30, '401': 30, '403': 30, '420': 20, '421': 12 };
+
+function gs1Def(s) {
+  const two = s.slice(0, 2);
+  if (GS1_FIXED[two]) return { ai: two, len: GS1_FIXED[two] };
+  if (GS1_VAR[two]) return { ai: two, max: GS1_VAR[two] };
+  if (/^3[1-6]\d\d/.test(s)) return { ai: s.slice(0, 4), len: 6 };      // pesos e medidas
+  if (/^41[0-7]/.test(s)) return { ai: s.slice(0, 3), len: 13 };        // locais (GLN)
+  if (/^7003/.test(s)) return { ai: '7003', len: 10 };                   // validade com hora
+  const three = s.slice(0, 3);
+  if (GS1_VAR3[three]) return { ai: three, max: GS1_VAR3[three] };
+  return null;
+}
+
+function gtinValid(code) {
+  if (!/^\d{8,14}$/.test(code)) return false;
+  const d = code.split('').map(Number);
+  const check = d.pop();
+  const sum = d.reverse().reduce((acc, n, i) => acc + n * (i % 2 === 0 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === check;
+}
+
+function gs1Date(v) {
+  if (!/^\d{6}$/.test(v)) return '';
+  const y = 2000 + Number(v.slice(0, 2));
+  const m = Number(v.slice(2, 4));
+  let d = Number(v.slice(4, 6));
+  if (m < 1 || m > 12) return '';
+  if (d === 0) d = new Date(Date.UTC(y, m, 0)).getUTCDate(); // "00" = último dia do mês
+  const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  return parseDateAny(iso);
+}
+
+/** Lê um código GS1. Devolve { barcode, gtin, lot, expiry, serial } ou null se não for GS1. */
+function parseGS1(raw) {
+  let s = String(raw || '').trim().replace(/^\][A-Za-z]\d/, '').replace(/^\x1d+/, '');
+  const out = {};
+  if (s.startsWith('(')) {
+    for (const m of s.matchAll(/\((\d{2,4})\)([^(]*)/g)) out[m[1]] = m[2].replace(/\x1d/g, '').trim();
+  } else {
+    if (!/^\d{4}/.test(s)) return null;
+    let i = 0;
+    while (i < s.length) {
+      if (s[i] === GS) { i++; continue; }
+      const def = gs1Def(s.slice(i));
+      if (!def) break;
+      i += def.ai.length;
+      let val;
+      if (def.len) {
+        val = s.substr(i, def.len);
+        if (val.length < def.len) break;
+      } else {
+        let end = s.indexOf(GS, i);
+        if (end < 0) end = s.length;
+        val = s.slice(i, Math.min(end, i + def.max));
+      }
+      i += val.length;
+      out[def.ai] = val;
+    }
+  }
+  const gtin = out['01'] || out['02'];
+  if (!gtin || !gtinValid(gtin)) return null;
+  // GTIN-14 começando com 0 = o EAN-13 impresso no código de barras comum
+  const barcode = gtin.length === 14 && gtin[0] === '0' ? gtin.slice(1) : gtin;
+  return {
+    gtin, barcode,
+    lot: out['10'] || '',
+    expiry: gs1Date(out['17'] || '') || gs1Date(out['15'] || '') || (out['7003'] ? gs1Date(out['7003'].slice(0, 6)) : ''),
+    serial: out['21'] || '',
+  };
+}
+
+/** Acha o produto pelo GTIN em qualquer formato (EAN-13, UPC-12, EAN-8, GTIN-14). */
+function findProductByGtin(gtin) {
+  const candidates = [...new Set([gtin, gtin.slice(1), gtin.replace(/^0+/, ''), gtin.slice(-13), gtin.slice(-12), gtin.slice(-8)])];
+  for (const c of candidates) {
+    const p = findProductByBarcode(c);
+    if (p) return p;
+  }
+  return undefined;
+}
+
+/** Aplica o que foi lido pela câmera ou pelo leitor USB no formulário de cadastro. */
+function applyScannedCode(code) {
+  const f = $('#form-novo');
+  const g = parseGS1(code);
+  if (!g) {
+    f.barcode.value = String(code).trim();
+    onBarcodeChange();
+    if (!findProductByBarcode(f.barcode.value)) f.name.focus();
+    return;
+  }
+  const known = findProductByGtin(g.gtin);
+  f.barcode.value = known ? known.barcode : g.barcode;
+  onBarcodeChange();
+  if (g.expiry) { f.expiry.value = fmtDate(g.expiry); updateExpiryHint(); }
+  if (g.lot) f.lot.value = g.lot;
+  if (g.expiry || g.lot) hideLastLot();
+  const parts = [g.lot && `lote ${g.lot}`, g.expiry && `validade ${fmtDate(g.expiry)}`].filter(Boolean);
+  $('#product-hint').textContent = (known ? 'Produto já cadastrado. ' : 'Produto novo — preencha o nome. ')
+    + (parts.length ? `Código 2D lido: ${parts.join(' · ')}.` : '');
+  if (!known) f.name.focus();
+  else if (!g.expiry) f.expiry.focus();
+  else f.qty.focus();
+}
+
 async function openScanner() {
   const dlg = $('#dlg-scan');
   const video = $('#scan-video');
@@ -470,10 +638,7 @@ async function openScanner() {
 
   const done = (code) => {
     closeScanner();
-    const f = $('#form-novo');
-    f.barcode.value = code;
-    onBarcodeChange();
-    if (!findProductByBarcode(code)) f.name.focus();
+    applyScannedCode(code);
     if (navigator.vibrate) navigator.vibrate(80);
   };
 
@@ -481,7 +646,7 @@ async function openScanner() {
     if ('BarcodeDetector' in window) {
       const formats = await BarcodeDetector.getSupportedFormats();
       const detector = new BarcodeDetector({
-        formats: formats.filter((f) => ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'].includes(f)),
+        formats: formats.filter((f) => ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code', 'data_matrix'].includes(f)),
       });
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       video.srcObject = stream;
@@ -640,7 +805,7 @@ function bind() {
   });
   fn.barcode.addEventListener('keydown', (e) => {
     // leitores USB/Bluetooth enviam Enter ao final do código
-    if (e.key === 'Enter') { e.preventDefault(); onBarcodeChange(); if (!findProductByBarcode(fn.barcode.value.trim())) fn.name.focus(); }
+    if (e.key === 'Enter') { e.preventDefault(); applyScannedCode(fn.barcode.value); }
   });
   fn.name.addEventListener('change', () => {
     if (!fn.barcode.value.trim()) {
@@ -649,6 +814,7 @@ function bind() {
     }
   });
   $('#btn-scan').addEventListener('click', openScanner);
+  $('#last-lot').addEventListener('click', (e) => { if (e.target.id === 'btn-last-lot') useLastLot(); });
   $('#btn-scan-close').addEventListener('click', closeScanner);
   $('#dlg-scan').addEventListener('close', () => { if (scanStop) { scanStop(); scanStop = null; } });
 

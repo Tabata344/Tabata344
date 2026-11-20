@@ -8,6 +8,11 @@ Funciona no navegador do celular, pode ser instalado na tela inicial e funciona 
 - **Cadastro de lotes** por código de barras: câmera do celular ou leitor USB/Bluetooth.
   - Produto já cadastrado tem nome, categoria e custo preenchidos automaticamente.
   - Mesmo produto + lote + validade + local soma a quantidade.
+  - **Código 2D GS1 (DataMatrix, GS1-128 ou QR)**: um bipe preenche produto, **lote e validade** (obrigatório em
+    medicamentos e cada vez mais comum em alimentos). Funciona pela câmera e por leitores USB/Bluetooth.
+  - **Sugestão do último lote**: ao bipar um produto já cadastrado, o app sugere o lote e a validade da última
+    entrada (botão "Usar"; não preenche sozinho para evitar salvar uma data antiga por engano).
+  - Ao bipar outro produto, a validade e o lote do anterior são limpos.
 - **Painel**: contadores de vencidos, críticos (≤ 7 dias), atenção (≤ 30 dias) e em dia, lista de "ação necessária" e **valor em risco** pelo custo.
 - **Lotes**: busca por nome, código, lote ou local, com filtros por status e cores.
 - **Baixa** de lote: vendido, promoção, descarte (perda), devolução ao fornecedor ou ajuste.

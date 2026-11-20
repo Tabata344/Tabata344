@@ -246,3 +246,11 @@ input.missing { border-color: var(--critico); background: var(--critico-bg); }
 .info-msg { margin: 0; font-size: .88rem; padding: 8px 10px; border-radius: 8px; background: var(--ok-bg); color: var(--text); }
 .error-msg { margin: 0; font-size: .88rem; padding: 8px 10px; border-radius: 8px; background: var(--vencido-bg); color: var(--vencido); }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: contents; }
+
+/* Sugestão do último lote */
+.last-lot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  margin-top: -4px; padding: 8px 10px; border-radius: 10px; font-size: .88rem;
+  background: var(--ok-bg); border: 1px solid var(--border);
+}
+.last-lot[hidden] { display: none; }
