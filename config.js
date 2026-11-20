@@ -7,6 +7,6 @@
 // (supabase/schema.sql). NUNCA coloque aqui a chave "service_role"/"secret".
 // Deixe em branco para usar o app só no aparelho, sem conta.
 window.VALIDADE_CONFIG = {
-  supabaseUrl: '',
-  supabaseAnonKey: '',
+  supabaseUrl: 'https://dclelecraybfyonkmqot.supabase.co',
+  supabaseAnonKey: 'sb_publishable_r93Ek9VCV3s6niHrkaj5QQ_pLuQfwbG',
 };
