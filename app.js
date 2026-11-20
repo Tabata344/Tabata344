@@ -523,7 +523,11 @@ const GS1_FIXED = {
   '00': 18, '01': 14, '02': 14, '03': 14, '11': 6, '12': 6, '13': 6, '15': 6, '16': 6, '17': 6, '20': 2,
 };
 const GS1_VAR = { '10': 20, '21': 20, '22': 20, '30': 8, '37': 8, '90': 30, '91': 90, '92': 90, '93': 90, '94': 90, '95': 90, '96': 90, '97': 90, '98': 90, '99': 90 };
-const GS1_VAR3 = { '240': 30, '241': 30, '250': 30, '251': 30, '400': 30, '401': 30, '403': 30, '420': 20, '421': 12 };
+const GS1_VAR3 = {
+  '240': 30, '241': 30, '250': 30, '251': 30, '400': 30, '401': 30, '403': 30, '420': 20, '421': 12,
+  // registro nacional de medicamento (713 = registro ANVISA, usado no IUM dos remédios no Brasil)
+  '710': 20, '711': 20, '712': 20, '713': 20, '714': 20, '715': 20,
+};
 
 function gs1Def(s) {
   const two = s.slice(0, 2);
@@ -568,7 +572,13 @@ function parseGS1(raw) {
     while (i < s.length) {
       if (s[i] === GS) { i++; continue; }
       const def = gs1Def(s.slice(i));
-      if (!def) break;
+      if (!def) {
+        // campo desconhecido: pula até o próximo separador em vez de desistir do resto
+        const next = s.indexOf(GS, i);
+        if (next < 0) break;
+        i = next + 1;
+        continue;
+      }
       i += def.ai.length;
       let val;
       if (def.len) {
