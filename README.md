@@ -13,6 +13,9 @@ Funciona no navegador do celular, pode ser instalado na tela inicial e funciona 
   - **Sugestão do último lote**: ao bipar um produto já cadastrado, o app sugere o lote e a validade da última
     entrada (botão "Usar"; não preenche sozinho para evitar salvar uma data antiga por engano).
   - Ao bipar outro produto, a validade e o lote do anterior são limpos.
+  - **Nome automático**: para produto novo, o app consulta a base pública e gratuita
+    [Open Food Facts](https://world.openfoodfacts.org) e preenche nome e categoria (a pessoa confere).
+    Sem internet ou produto fora da base, segue o cadastro manual.
 - **Painel**: contadores de vencidos, críticos (≤ 7 dias), atenção (≤ 30 dias) e em dia, lista de "ação necessária" e **valor em risco** pelo custo.
 - **Lotes**: busca por nome, código, lote ou local, com filtros por status e cores.
 - **Baixa** de lote: vendido, promoção, descarte (perda), devolução ao fornecedor ou ajuste.
@@ -89,6 +92,6 @@ Como funciona a sincronização:
 2. **Push diário** pelo servidor, mesmo com o app fechado.
 3. **Leitura da data por foto (OCR)**, para cadastrar mais rápido.
 4. **Receber a NF-e automaticamente** (e-mail do fornecedor ou consulta pela chave/CNPJ via serviço de terceiros), sem precisar baixar o XML.
-5. **Base de produtos por EAN** (ex.: Cosmos/Open Food Facts), para preencher o nome automaticamente.
+5. ~~Base de produtos por EAN~~ ✅ feito (Open Food Facts). Avaliar o Cosmos (Bluesoft) para cobrir mais produtos regionais.
 6. **Multi-loja**, perfis (gerente/repositor) e relatório mensal em PDF.
 7. Monetização: assinatura mensal por loja (plano grátis limitado em nº de lotes).

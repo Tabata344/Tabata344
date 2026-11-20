@@ -410,21 +410,108 @@ function addLot({ productId, expiry, qty, lot = '', location = '', supplier = ''
 }
 
 let formCode = ''; // código do produto que está no formulário agora
+let scanExtra = '';  // "Código 2D lido: ..." para manter junto das outras mensagens
+
+/* ---------- nome do produto pela base pública (Open Food Facts) ----------
+ * O código de barras comum é só um número. Para produto novo, consultamos a
+ * base gratuita Open Food Facts e preenchemos nome e categoria (o usuário confere). */
+const OFF_URL = 'https://world.openfoodfacts.org/api/v2/product/';
+const OFF_FIELDS = 'product_name_pt,product_name,generic_name_pt,generic_name,abbreviated_product_name,brands,quantity,categories_tags';
+const productLookupCache = {};
+const OFF_CATEGORIES = [
+  [/beverage|bebida|drink|soda|refrigerante|juice|suco|water|agua|beer|cerveja|wine|vinho|coffee|cafe|tea/, 'Bebidas'],
+  [/chocolate|cand|confection|sweet|doce|biscuit|cookie|bolacha|wafer|dessert|sobremesa/, 'Doces e biscoitos'],
+  [/dair|milk|leite|yogurt|iogurte|cheese|queijo|butter|manteiga|cream|requeij/, 'Laticínios'],
+  [/bread|pao|paes|bakery|cake|bolo/, 'Padaria'],
+  [/meat|carne|ham|presunto|sausage|salsicha|linguica|cold-cut|frios|chicken|frango/, 'Frios e carnes'],
+  [/frozen|congelad|ice-cream|sorvete/, 'Congelados'],
+  [/cereal|pasta|massa|rice|arroz|bean|feijao|sauce|molho|condiment|oil|oleo|azeite|canned|conserva|flour|farinha|sugar|acucar|salt|sal|snack|salgad/, 'Mercearia'],
+];
+
+function validName(v) {
+  const s = String(v || '').trim();
+  return s.length >= 3 && /[a-zà-ú]{2}/i.test(s) ? s : '';
+}
+
+function offToProduct(p) {
+  const brands = String(p.brands || '').split(',').map((b) => b.trim()).filter(Boolean);
+  let name = [p.product_name_pt, p.product_name, p.generic_name_pt, p.generic_name, p.abbreviated_product_name]
+    .map(validName).find(Boolean) || '';
+  if (!name && brands.length) name = brands[brands.length - 1];
+  if (!name) return null;
+  if (name === name.toUpperCase()) name = name.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+  const low = name.toLowerCase();
+  const norm = (x) => x.toLowerCase().replace(/\s+/g, '');
+  if (brands.length && !brands.some((b) => low.includes(b.toLowerCase()))) name += ` ${brands[0]}`;
+  const qty = String(p.quantity || '').trim();
+  if (qty && !norm(name).includes(norm(qty))) name += ` ${qty}`;
+  const tags = (p.categories_tags || []).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const cat = (OFF_CATEGORIES.find(([re]) => re.test(tags)) || [])[1] || '';
+  return { name, category: cat };
+}
+
+async function lookupProductOnline(code) {
+  if (code in productLookupCache) return productLookupCache[code];
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
+  try {
+    const r = await fetch(`${OFF_URL}${encodeURIComponent(code)}?fields=${OFF_FIELDS}`, { signal: ctrl.signal });
+    if (r.status === 404) { productLookupCache[code] = null; return null; }
+    if (!r.ok) return null;
+    const d = await r.json();
+    const info = d.status === 1 && d.product ? offToProduct(d.product) : null;
+    productLookupCache[code] = info;
+    return info;
+  } catch (e) {
+    return null; // sem internet ou base fora do ar: segue o cadastro manual
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function setProductHint(msg) {
+  $('#product-hint').textContent = msg + (scanExtra ? ` ${scanExtra}` : '');
+}
+
+async function suggestNameOnline(code) {
+  // só códigos de produto (EAN/UPC/GTIN); códigos internos de balança começam com 2
+  if (!gtinValid(code) || (code.length === 13 && code[0] === '2') || !navigator.onLine) return;
+  const f = $('#form-novo');
+  setProductHint('Produto novo — buscando o nome na base pública…');
+  const info = await lookupProductOnline(code);
+  if (f.barcode.value.trim() !== code || findProductByBarcode(code)) return; // a pessoa já mudou de produto
+  if (!info) { setProductHint('Produto novo — não encontrado na base pública, preencha o nome.'); return; }
+  const wasTypingName = document.activeElement === f.name;
+  let filled = false;
+  if (!f.name.value.trim()) { f.name.value = info.name; filled = true; }
+  if (!f.category.value.trim() && info.category) f.category.value = info.category;
+  const sameName = f.name.value.trim() === info.name;
+  setProductHint(sameName ? 'Nome encontrado na base pública (Open Food Facts) — confira antes de salvar.'
+    : 'Produto novo — confira o nome.');
+  if (filled && wasTypingName) (f.expiry.value ? f.qty : f.expiry).focus();
+}
 
 function onBarcodeChange() {
   const f = $('#form-novo');
   const code = f.barcode.value.trim();
   if (code.length > 14 && parseGS1(code)) { applyScannedCode(code); return; }
-  if (code !== formCode) {
+  const changed = code !== formCode;
+  if (changed) {
     // outro produto: validade e lote do anterior não valem mais
     formCode = code;
+    scanExtra = '';
     f.expiry.value = '';
     f.lot.value = '';
     updateExpiryHint();
   }
   const p = findProductByBarcode(code);
   if (p) fillFromProduct(p);
-  else { $('#product-hint').textContent = code ? 'Produto novo — preencha o nome.' : ''; hideLastLot(); }
+  else if (changed) {
+    // só muda a mensagem quando o código muda (senão apagaria o "buscando o nome…")
+    setProductHint(code ? 'Produto novo — preencha o nome.' : '');
+    hideLastLot();
+    if (code) suggestNameOnline(code);
+  }
 }
 
 function onSubmitNovo(e) {
@@ -460,6 +547,7 @@ function onSubmitNovo(e) {
   $('#product-hint').textContent = '';
   hideLastLot();
   formCode = '';
+  scanExtra = '';
   renderNovo();
   f.barcode.focus();
 }
@@ -632,8 +720,10 @@ function applyScannedCode(code) {
   if (g.lot) f.lot.value = g.lot;
   if (g.expiry || g.lot) hideLastLot();
   const parts = [g.lot && `lote ${g.lot}`, g.expiry && `validade ${fmtDate(g.expiry)}`].filter(Boolean);
-  $('#product-hint').textContent = (known ? 'Produto já cadastrado. ' : 'Produto novo — preencha o nome. ')
-    + (parts.length ? `Código 2D lido: ${parts.join(' · ')}.` : '');
+  scanExtra = parts.length ? `Código 2D lido: ${parts.join(' · ')}.` : '';
+  if (known) setProductHint('Produto já cadastrado.');
+  else if (!/buscando|encontrado/.test($('#product-hint').textContent)) setProductHint('Produto novo — preencha o nome.');
+  else setProductHint($('#product-hint').textContent.replace(/\s*Código 2D lido:.*$/, ''));
   if (!known) f.name.focus();
   else if (!g.expiry) f.expiry.focus();
   else f.qty.focus();
