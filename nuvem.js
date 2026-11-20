@@ -366,6 +366,10 @@ async function doSignUp(email, password) {
     email, password, options: { emailRedirectTo: location.origin + location.pathname },
   });
   if (error) throw error;
+  // O Supabase não revela se o e-mail já existe: devolve um usuário sem "identities" e não envia e-mail
+  if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    throw new Error('User already registered');
+  }
   if (data.session) {
     cloudUser = data.user;
     await afterLogin();
