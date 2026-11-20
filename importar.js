@@ -241,7 +241,7 @@ function confirmNfe() {
   });
   notes.forEach((n, ni) => {
     if (!perNote[ni]) return;
-    db.imports.push({ key: n.key, number: n.number, supplier: n.supplier, date: n.date, importedAt: todayISO(), lots: perNote[ni] });
+    db.imports.push({ id: n.key || uid(), key: n.key, number: n.number, supplier: n.supplier, date: n.date, importedAt: todayISO(), lots: perNote[ni] });
   });
   saveDb();
   nfePending = null;

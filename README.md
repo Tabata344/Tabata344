@@ -23,6 +23,9 @@ Funciona no navegador do celular, pode ser instalado na tela inicial e funciona 
   - Aceita datas `31/12/2026`, `31/12/26`, `2026-12-31`, `12/2026` (último dia do mês) e datas do Excel.
   - Se houver validade e quantidade, cria os lotes também.
 - Arquivos para testar em `exemplos/` (nota fiscal fictícia e modelo de planilha).
+- **Conta e nuvem (opcional)**: login por e-mail e senha, dados da loja na nuvem (Supabase), vários aparelhos e
+  funcionários por **código de convite**. Funciona offline e sincroniza quando a internet volta.
+  Só o dono altera os ajustes da loja e pode remover o acesso de funcionários.
 - Dados de exemplo, para demonstração.
 
 ## Como rodar
@@ -44,20 +47,40 @@ GitHub Pages, Netlify ou Vercel, todos gratuitos para sites estáticos.
 | `index.html` | Telas (painel, lotes, novo, relatórios, ajustes) |
 | `styles.css` | Visual mobile-first, com tema claro e escuro |
 | `app.js` | Lógica, armazenamento local, leitor de código, relatórios |
+| `nuvem.js` | Login, loja/convites e sincronização com o Supabase |
+| `config.js` | Endereço e chave pública do projeto Supabase |
+| `supabase/schema.sql` | Banco de dados e regras de segurança (RLS) |
 | `importar.js` | Importação de NF-e (XML) e planilhas (CSV/Excel) |
 | `exemplos/` | Nota fiscal fictícia e modelo de planilha para testar |
 | `sw.js` | Cache offline e clique na notificação |
 | `manifest.webmanifest` | Instalação como app |
 
+## Configurar a nuvem (Supabase)
+
+Sem esta configuração o app funciona normalmente, só que com os dados apenas no aparelho.
+
+1. Crie uma conta grátis em [supabase.com](https://supabase.com) e um **New project** (região: São Paulo).
+2. Em **SQL Editor**, cole todo o conteúdo de `supabase/schema.sql` e clique em **Run**.
+3. Em **Authentication → URL Configuration**, coloque em **Site URL** o endereço do app
+   (ex.: `https://tabata344.github.io/Tabata344/`). É para onde vão os links de confirmação de e-mail.
+4. Em **Project Settings → API**, copie a **Project URL** e a chave **anon public** (ou *publishable*)
+   para o `config.js`. Essas duas são públicas; **nunca** use a chave `service_role`/*secret* no app.
+
+Como funciona a sincronização:
+- Cada aparelho guarda tudo localmente e envia só o que mudou; depois baixa o que mudou na nuvem (`updated_at`).
+- A quantidade de um lote é calculada (`quantidade inicial + entradas − baixas`), e as baixas são registros
+  que só se acumulam. Assim, duas pessoas dando baixa no mesmo lote ao mesmo tempo **não** se sobrescrevem.
+- Cada loja só enxerga os próprios dados (Row Level Security no banco).
+
 ## Limitações atuais
 
-- Os dados ficam **só no aparelho** (localStorage). Trocar de celular ou limpar o navegador apaga tudo; use o backup.
-- Não há login nem sincronização entre vários funcionários.
+- Sem conta, os dados ficam **só no aparelho** (localStorage). Trocar de celular ou limpar o navegador apaga tudo; use o backup ou a conta na nuvem.
+- Cada pessoa participa de uma loja por vez.
 - Os alertas só disparam ao abrir o app. Push em segundo plano exige servidor.
 
 ## Próximos passos sugeridos
 
-1. **Backend + login** (ex.: Supabase/Firebase): vários usuários por loja, sincronização e backup automático.
+1. ~~Backend + login~~ ✅ feito (Supabase).
 2. **Push diário** pelo servidor, mesmo com o app fechado.
 3. **Leitura da data por foto (OCR)**, para cadastrar mais rápido.
 4. **Receber a NF-e automaticamente** (e-mail do fornecedor ou consulta pela chave/CNPJ via serviço de terceiros), sem precisar baixar o XML.

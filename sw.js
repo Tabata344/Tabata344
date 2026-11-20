@@ -1,11 +1,13 @@
 // Service worker: deixa o app funcionando offline.
-const CACHE = 'validade-certa-v3';
+const CACHE = 'validade-certa-v4';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './importar.js',
+  './nuvem.js',
+  './config.js',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',

@@ -8,16 +8,18 @@
 const STORAGE_KEY = 'validade-certa:v1';
 const DEFAULT_DB = {
   products: {},   // id -> { id, barcode, name, category, cost }
-  lots: [],       // { id, productId, lot, expiry: 'YYYY-MM-DD', qty, location, createdAt }
+  // qty é calculada: initialQty + entradas − saídas (movimentações). Assim duas pessoas
+  // podem dar baixa no mesmo lote ao mesmo tempo sem uma sobrescrever a outra.
+  lots: [],       // { id, productId, lot, expiry: 'YYYY-MM-DD', initialQty, qty, location, createdAt, deleted? }
   movements: [],  // { id, lotId, productId, type, qty, unitCost, date, note }
-  imports: [],    // notas fiscais importadas: { key, number, supplier, date, importedAt, lots }
+  imports: [],    // notas fiscais importadas: { id, key, number, supplier, date, importedAt, lots }
   settings: { storeName: '', criticalDays: 7, warnDays: 30, lastNotified: '' },
 };
 
 const STATUS_LABEL = { vencido: 'Vencido', critico: 'Crítico', atencao: 'Atenção', ok: 'OK' };
 const MOVE_LABEL = {
   venda: 'Vendido', promocao: 'Promoção', descarte: 'Descarte',
-  devolucao: 'Devolução', ajuste: 'Ajuste',
+  devolucao: 'Devolução', ajuste: 'Ajuste', entrada: 'Entrada',
 };
 
 let db = loadDb();
@@ -77,26 +79,54 @@ function loadDb() {
   return structuredClone(DEFAULT_DB);
 }
 function normalizeDb(raw) {
-  return {
+  const out = {
     products: raw.products || {},
     lots: raw.lots || [],
     movements: raw.movements || [],
     imports: raw.imports || [],
     settings: { ...DEFAULT_DB.settings, ...(raw.settings || {}) },
   };
+  // Migração: versões antigas guardavam só a quantidade atual do lote
+  const delta = movementDelta(out.movements);
+  out.lots.forEach((l) => {
+    if (l.initialQty === undefined) l.initialQty = (Number(l.qty) || 0) - (delta[l.id] || 0);
+  });
+  out.imports.forEach((i, idx) => {
+    if (!i.id) i.id = i.key || `imp-${idx}-${i.importedAt || ''}`;
+  });
+  recomputeQty(out);
+  return out;
 }
+
+/** Soma das movimentações por lote: entradas somam, saídas subtraem. */
+function movementDelta(movements) {
+  const delta = {};
+  for (const m of movements) {
+    if (!m.lotId) continue;
+    delta[m.lotId] = (delta[m.lotId] || 0) + (m.type === 'entrada' ? 1 : -1) * (Number(m.qty) || 0);
+  }
+  return delta;
+}
+
+function recomputeQty(target = db) {
+  const delta = movementDelta(target.movements);
+  target.lots.forEach((l) => { l.qty = Math.max(0, (Number(l.initialQty) || 0) + (delta[l.id] || 0)); });
+}
+
 function saveDb() {
+  recomputeQty();
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
   } catch (e) {
     toast('Não foi possível salvar: armazenamento cheio ou bloqueado.');
   }
+  if (typeof cloudOnLocalChange === 'function') cloudOnLocalChange();
 }
 
 /* ---------- consultas ---------- */
 function activeLots() {
   return db.lots
-    .filter((l) => l.qty > 0)
+    .filter((l) => !l.deleted && l.qty > 0)
     .map((l) => {
       const product = db.products[l.productId] || { name: '(produto removido)' };
       const days = daysUntil(l.expiry);
@@ -264,6 +294,7 @@ function renderRelatorios() {
 }
 
 function renderAjustes() {
+  if (typeof refreshCloudPanel === 'function') refreshCloudPanel();
   const f = $('#form-settings');
   f.storeName.value = db.settings.storeName;
   f.criticalDays.value = db.settings.criticalDays;
@@ -322,10 +353,19 @@ function fillFromProduct(p) {
 
 /** Cria um lote, ou soma ao lote igual (mesmo produto, lote, validade e local). */
 function addLot({ productId, expiry, qty, lot = '', location = '', supplier = '', invoice = '' }) {
-  const existing = db.lots.find((l) => l.productId === productId && l.expiry === expiry
+  const existing = db.lots.find((l) => !l.deleted && l.productId === productId && l.expiry === expiry
     && (l.lot || '') === lot && (l.location || '') === location && l.qty > 0);
-  if (existing) { existing.qty += qty; return existing; }
-  const created = { id: uid(), productId, lot, expiry, qty, location, supplier, invoice, createdAt: todayISO() };
+  if (existing) {
+    db.movements.push({
+      id: uid(), lotId: existing.id, productId, type: 'entrada', qty,
+      unitCost: Number(db.products[productId]?.cost) || 0, date: todayISO(), note: invoice ? `NF ${invoice}` : '',
+    });
+    existing.qty += qty;
+    return existing;
+  }
+  const created = {
+    id: uid(), productId, lot, expiry, initialQty: qty, qty, location, supplier, invoice, createdAt: todayISO(),
+  };
   db.lots.push(created);
   return created;
 }
@@ -401,8 +441,7 @@ function onSubmitBaixa(e) {
     id: uid(), lotId: lot.id, productId: lot.productId, type: f.type.value,
     qty, unitCost: Number(p.cost) || 0, date: todayISO(), note: f.note.value.trim(),
   });
-  lot.qty -= qty;
-  saveDb();
+  saveDb(); // recalcula a quantidade do lote a partir das movimentações
   $('#dlg-baixa').close();
   toast(`Baixa registrada: ${qty} un. (${MOVE_LABEL[f.type.value]}).`);
   rerender();
@@ -412,7 +451,7 @@ function onDeleteLot() {
   const lot = db.lots.find((l) => l.id === baixaLotId);
   if (!lot) return;
   if (!confirm('Excluir este lote? Use apenas para corrigir um cadastro errado — não entra nos relatórios.')) return;
-  db.lots = db.lots.filter((l) => l.id !== baixaLotId);
+  lot.deleted = true; // marcado (não apagado) para a exclusão chegar aos outros aparelhos
   saveDb();
   $('#dlg-baixa').close();
   toast('Lote excluído.');
@@ -540,6 +579,10 @@ function importJson(file) {
 }
 
 function loadDemo() {
+  if (typeof cloudConnected === 'function' && cloudConnected()) {
+    toast('Dados de exemplo só podem ser usados sem conta conectada.');
+    return;
+  }
   if (db.lots.length && !confirm('Adicionar dados de exemplo aos dados atuais?')) return;
   const t = todayISO();
   const demo = [
@@ -555,7 +598,7 @@ function loadDemo() {
   demo.forEach(([barcode, name, category, cost, d, qty, location], i) => {
     const id = `ean:${barcode}`;
     db.products[id] = { id, barcode, name, category, cost };
-    db.lots.push({ id: uid(), productId: id, lot: `L${100 + i}`, expiry: addDaysISO(t, d), qty, location, createdAt: t });
+    db.lots.push({ id: uid(), productId: id, lot: `L${100 + i}`, expiry: addDaysISO(t, d), initialQty: qty, qty, location, createdAt: t });
   });
   db.movements.push(
     { id: uid(), lotId: '', productId: 'ean:7891000100103', type: 'descarte', qty: 4, unitCost: 4.2, date: addDaysISO(t, -5), note: 'vencido' },
@@ -642,6 +685,10 @@ function bind() {
   $('#file-import').addEventListener('change', (e) => { if (e.target.files[0]) importJson(e.target.files[0]); e.target.value = ''; });
   $('#btn-demo').addEventListener('click', loadDemo);
   $('#btn-clear').addEventListener('click', () => {
+    if (typeof cloudConnected === 'function' && cloudConnected()) {
+      toast('Conta conectada: para limpar este aparelho, use “Sair da conta”.');
+      return;
+    }
     if (!confirm('Apagar TODOS os dados deste aparelho? Isso não pode ser desfeito.')) return;
     db = structuredClone(DEFAULT_DB);
     saveDb();
@@ -666,6 +713,7 @@ function init() {
   }
   if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
   checkDailyAlert();
+  if (typeof cloudInit === 'function') cloudInit();
 }
 
 init();

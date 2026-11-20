@@ -17,7 +17,10 @@
       <h1>Validade Certa</h1>
       <p id="store-name" class="muted"></p>
     </div>
-    <span id="today" class="muted"></span>
+    <div class="top-right">
+      <a id="sync-badge" href="#ajustes" hidden></a>
+      <span id="today" class="muted"></span>
+    </div>
   </header>
 
   <main id="app">
@@ -164,6 +167,7 @@
 
     <!-- Ajustes -->
     <section id="view-ajustes" class="view" hidden>
+      <div class="panel form" id="cloud-panel"></div>
       <form id="form-settings" class="panel form">
         <h2>Ajustes</h2>
         <label>Nome da loja
@@ -250,7 +254,9 @@
 
   <div id="toast" role="status" aria-live="polite"></div>
 
+  <script src="config.js"></script>
   <script src="importar.js"></script>
+  <script src="nuvem.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
