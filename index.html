@@ -83,7 +83,8 @@
         </div>
         <div class="grid2">
           <label>Validade *
-            <input name="expiry" type="date" required>
+            <input name="expiry" inputmode="numeric" placeholder="dd/mm/aaaa" maxlength="10" autocomplete="off" required>
+            <span class="hint" id="expiry-hint"></span>
           </label>
           <label>Quantidade *
             <input name="qty" type="number" min="1" step="1" required inputmode="numeric" value="1">

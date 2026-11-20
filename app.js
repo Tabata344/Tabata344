@@ -183,8 +183,41 @@ function fillDatalists() {
 
 function renderNovo() {
   fillDatalists();
-  const exp = $('#form-novo').expiry;
-  exp.min = addDaysISO(todayISO(), -365);
+  updateExpiryHint();
+}
+
+/* Campo de validade digitado (dd/mm/aaaa) em vez do calendário nativo:
+ * o calendário do celular abre no dia de hoje e é fácil confirmar sem mudar. */
+function maskDate(value) {
+  const d = value.replace(/\D/g, '').slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+
+/** Valida a data digitada; devolve 'YYYY-MM-DD' ou '' (com mensagem). */
+function readExpiry(value) {
+  const iso = parseDateAny(value);
+  if (!iso) return { iso: '', error: value.trim() ? 'Data inválida. Use dd/mm/aaaa, ex.: 17/11/2026' : '' };
+  const year = Number(iso.slice(0, 4));
+  const now = Number(todayISO().slice(0, 4));
+  if (year < now - 5 || year > now + 15) return { iso: '', error: `Confira o ano (${year}).` };
+  return { iso, error: '' };
+}
+
+function updateExpiryHint() {
+  const input = $('#form-novo').expiry;
+  const hint = $('#expiry-hint');
+  const { iso, error } = readExpiry(input.value);
+  input.setCustomValidity(error);
+  if (!iso) {
+    hint.className = `hint ${error ? 'summary-bad' : ''}`;
+    hint.textContent = error || 'Digite só os números: 171126 → 17/11/2026. Mês/ano também vale: 1126.';
+    return;
+  }
+  const days = daysUntil(iso);
+  hint.className = `hint when-${statusOf(days)}`;
+  hint.textContent = `${fmtDate(iso)} — ${daysText(days)}`;
 }
 
 function renderRelatorios() {
@@ -310,7 +343,8 @@ function onSubmitNovo(e) {
   const barcode = f.barcode.value.trim();
   const name = f.name.value.trim();
   const qty = parseInt(f.qty.value, 10);
-  const expiry = f.expiry.value;
+  const { iso: expiry, error } = readExpiry(f.expiry.value);
+  if (error) { toast(error); f.expiry.focus(); return; }
   if (!name || !expiry || !(qty > 0)) { toast('Preencha produto, validade e quantidade.'); return; }
 
   let product = findProductByBarcode(barcode) || (!barcode && findProductByName(name));
@@ -556,6 +590,11 @@ function bind() {
   const fn = $('#form-novo');
   fn.addEventListener('submit', onSubmitNovo);
   fn.barcode.addEventListener('change', onBarcodeChange);
+  fn.expiry.addEventListener('input', () => {
+    const masked = maskDate(fn.expiry.value);
+    if (masked !== fn.expiry.value) fn.expiry.value = masked;
+    updateExpiryHint();
+  });
   fn.barcode.addEventListener('keydown', (e) => {
     // leitores USB/Bluetooth enviam Enter ao final do código
     if (e.key === 'Enter') { e.preventDefault(); onBarcodeChange(); if (!findProductByBarcode(fn.barcode.value.trim())) fn.name.focus(); }

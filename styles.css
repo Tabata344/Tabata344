@@ -213,3 +213,11 @@ input.missing { border-color: var(--critico); background: var(--critico-bg); }
 .sticky-actions { position: sticky; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 4; box-shadow: 0 -4px 12px rgb(0 0 0 / 8%); }
 .summary-ok { color: var(--ok); }
 .summary-bad { color: var(--critico); }
+
+/* Prévia da validade digitada */
+#expiry-hint { margin: 2px 0 0; font-weight: 600; }
+.hint.when-vencido { color: var(--vencido); }
+.hint.when-critico { color: var(--critico); }
+.hint.when-atencao { color: var(--atencao); }
+.hint.when-ok { color: var(--ok); }
+#expiry-hint:not([class*="when-"]):not(.summary-bad) { color: var(--muted); font-weight: 400; }
