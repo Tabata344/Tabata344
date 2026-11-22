@@ -80,6 +80,18 @@ Como funciona a sincronização:
   que só se acumulam. Assim, duas pessoas dando baixa no mesmo lote ao mesmo tempo **não** se sobrescrevem.
 - Cada loja só enxerga os próprios dados (Row Level Security no banco).
 
+## Leitura de validade e lote por foto (IA)
+
+O botão **"📷 Ler validade e lote pela foto"** (cadastro) envia a foto reduzida para a função
+`supabase/functions/ler-etiqueta`, que usa o Claude (Anthropic) para ler a validade e o lote e devolve um JSON
+conferido (datas impossíveis ou anos fora do esperado são descartados). A pessoa sempre confere antes de salvar.
+
+- Requer conta conectada e internet. Cada loja tem um limite diário (`stores.label_daily_limit`, padrão 50).
+- Cada leitura fica registrada em `label_reads` (modelo e tokens) para medir o custo real.
+- Segredos da função (Supabase → Edge Functions → Secrets): `ANTHROPIC_API_KEY` (obrigatório),
+  `LABEL_MODEL` (padrão `claude-opus-5-5`; ex.: `claude-haiku-5-5` para custo menor) e `LABEL_EFFORT` (padrão `low`).
+- A chave da Anthropic fica só no Supabase, nunca no app.
+
 ## Limitações atuais
 
 - Sem conta, os dados ficam **só no aparelho** (localStorage). Trocar de celular ou limpar o navegador apaga tudo; use o backup ou a conta na nuvem.

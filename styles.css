@@ -261,3 +261,9 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: contents; }
 /* iPhone: campos com letra menor que 16px fazem o Safari dar zoom ao tocar
    e a tela não volta sozinha. Todos os campos ficam com 16px. */
 input, select, textarea { font-size: 16px; }
+
+/* Leitura por foto */
+.photo-label { display: flex; flex-direction: column; gap: 4px; }
+.photo-label .btn { width: 100%; }
+#photo-hint { margin: 0; font-weight: 600; }
+#photo-hint:empty { display: none; }

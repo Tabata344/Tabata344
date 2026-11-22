@@ -201,3 +201,58 @@ revoke all on all tables in schema public from anon;
 grant select, insert, update, delete on public.products, public.lots, public.movements, public.nfe_imports to authenticated;
 grant select, update on public.stores to authenticated;
 grant select, delete on public.store_members to authenticated;
+
+-- ============================================================
+-- Leitura de validade/lote por foto (IA) — controle de uso
+-- Cada foto lida fica registrada (para limitar por dia e medir o custo).
+-- ============================================================
+alter table public.stores add column if not exists label_daily_limit int not null default 50
+  check (label_daily_limit between 0 and 10000);
+
+create table if not exists public.label_reads (
+  id            bigserial primary key,
+  store_id      uuid not null references public.stores (id) on delete cascade,
+  user_id       uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  created_at    timestamptz not null default now(),
+  model         text,
+  input_tokens  int,
+  output_tokens int,
+  ok            boolean
+);
+create index if not exists label_reads_store_day_idx on public.label_reads (store_id, created_at);
+alter table public.label_reads enable row level security;
+drop policy if exists label_reads_select on public.label_reads;
+create policy label_reads_select on public.label_reads for select to authenticated using (is_member(store_id));
+revoke all on public.label_reads from anon;
+grant select on public.label_reads to authenticated;
+
+-- Reserva uma leitura: confere se a pessoa é da loja e se o limite do dia (horário de Brasília) não acabou.
+create or replace function public.consume_label_read(p_store uuid) returns bigint
+language plpgsql security definer set search_path = public as $$
+declare
+  v_limit int;
+  v_used  int;
+  v_id    bigint;
+  v_start timestamptz := date_trunc('day', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo';
+begin
+  if auth.uid() is null then raise exception 'Faça login primeiro'; end if;
+  if not is_member(p_store) then raise exception 'Sem acesso a esta loja'; end if;
+  perform pg_advisory_xact_lock(hashtext(p_store::text)); -- evita passar do limite com fotos simultâneas
+  select label_daily_limit into v_limit from stores where id = p_store;
+  select count(*) into v_used from label_reads where store_id = p_store and created_at >= v_start;
+  if v_used >= v_limit then
+    raise exception 'Limite diário de leituras por foto atingido (%)', v_limit;
+  end if;
+  insert into label_reads (store_id, user_id) values (p_store, auth.uid()) returning id into v_id;
+  return v_id;
+end $$;
+
+-- Completa o registro com o modelo e os tokens usados (só quem fez a leitura).
+create or replace function public.finish_label_read(p_id bigint, p_model text, p_input int, p_output int, p_ok boolean)
+returns void language sql security definer set search_path = public as $$
+  update label_reads set model = p_model, input_tokens = p_input, output_tokens = p_output, ok = p_ok
+  where id = p_id and user_id = auth.uid();
+$$;
+
+revoke all on function public.consume_label_read(uuid), public.finish_label_read(bigint, text, int, int, boolean) from public, anon;
+grant execute on function public.consume_label_read(uuid), public.finish_label_read(bigint, text, int, int, boolean) to authenticated;

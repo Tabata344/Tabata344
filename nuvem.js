@@ -457,6 +457,21 @@ function shareInvite() {
   else navigator.clipboard?.writeText(text).then(() => toast('Convite copiado!'), () => toast(text));
 }
 
+/* ---------- leitura de validade e lote pela foto (função ler-etiqueta) ---------- */
+async function readLabelPhoto(base64, mediaType) {
+  if (!cloudConnected() || !sb) throw new Error('Entre na sua conta (Ajustes) para usar a leitura por foto.');
+  const { data, error } = await sb.functions.invoke('ler-etiqueta', {
+    body: { image: base64, media_type: mediaType, store_id: syncMeta.storeId },
+  });
+  if (error) {
+    if (error.context?.status === 404) throw new Error('A leitura por foto ainda não foi ativada nesta versão do app.');
+    let msg = '';
+    try { msg = (await error.context.json()).error; } catch (e) { /* resposta sem JSON */ }
+    throw new Error(msg || friendlyError(error));
+  }
+  return data;
+}
+
 /* ---------- interface ---------- */
 const STATUS_TEXT = {
   off: '', idle: 'Sincronizado', syncing: 'Sincronizando…', pending: 'Alterações a enviar',

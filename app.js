@@ -500,6 +500,7 @@ function onBarcodeChange() {
     // outro produto: validade e lote do anterior não valem mais
     formCode = code;
     scanExtra = '';
+    setPhotoHint('');
     f.expiry.value = '';
     f.lot.value = '';
     updateExpiryHint();
@@ -548,6 +549,7 @@ function onSubmitNovo(e) {
   hideLastLot();
   formCode = '';
   scanExtra = '';
+  setPhotoHint('');
   renderNovo();
   f.barcode.focus();
 }
@@ -727,6 +729,77 @@ function applyScannedCode(code) {
   if (!known) f.name.focus();
   else if (!g.expiry) f.expiry.focus();
   else f.qty.focus();
+}
+
+/* ---------- validade e lote pela foto (IA) ---------- */
+let photoLot = ''; // lote preenchido pela última foto (para trocar se vier outra foto)
+
+function setPhotoHint(msg, bad = false) {
+  const el = $('#photo-hint');
+  el.textContent = msg;
+  el.classList.toggle('summary-bad', bad);
+}
+
+/** Reduz a foto (lado maior até `max` px) e devolve o JPEG em base64. */
+async function shrinkImage(file, max = 1280, quality = 0.85) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    return { data: canvas.toDataURL('image/jpeg', quality).split(',')[1], mediaType: 'image/jpeg' };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function onPhotoLabelClick() {
+  if (typeof cloudConnected !== 'function' || !cloudConnected()) {
+    setPhotoHint('A leitura por foto usa a nuvem: entre na sua conta em Ajustes.', true);
+    return;
+  }
+  if (!navigator.onLine) { setPhotoHint('Sem internet agora: digite a validade.', true); return; }
+  $('#photo-label-file').click();
+}
+
+async function onPhotoLabelFile(file) {
+  const btn = $('#btn-photo-label');
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Lendo a foto…';
+  setPhotoHint('');
+  try {
+    const { data, mediaType } = await shrinkImage(file);
+    const r = await readLabelPhoto(data, mediaType);
+    const f = $('#form-novo');
+    if (r.expiry) { f.expiry.value = fmtDate(r.expiry); updateExpiryHint(); }
+    if (r.lot) f.lot.value = r.lot;
+    else if (photoLot && f.lot.value === photoLot) f.lot.value = ''; // lote da foto anterior, não desta
+    photoLot = r.lot || '';
+    if (r.expiry || r.lot) hideLastLot();
+    const parts = [
+      r.expiry && `validade ${fmtDate(r.expiry)}${r.month_year_only ? ' (só mês/ano na embalagem)' : ''}`,
+      r.lot && `lote ${r.lot}`,
+    ].filter(Boolean);
+    if (r.expiry) {
+      setPhotoHint(`Lido da foto: ${parts.join(' · ')}. ${r.confidence === 'high' ? 'Confira antes de salvar.' : 'Confira com atenção!'} ${r.note || ''}`.trim(),
+        r.confidence === 'low');
+      f.qty.focus();
+    } else {
+      setPhotoHint(`Não consegui ler a validade nessa foto${parts.length ? ` (li ${parts.join(' · ')})` : ''}. `
+        + (r.note || 'Tente de novo com mais luz, sem reflexo e mais perto, ou digite a data.'), true);
+    }
+  } catch (e) {
+    setPhotoHint(e.message || 'Não foi possível ler a foto. Digite a validade.', true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
 }
 
 async function openScanner() {
@@ -914,6 +987,12 @@ function bind() {
     }
   });
   $('#btn-scan').addEventListener('click', openScanner);
+  $('#btn-photo-label').addEventListener('click', onPhotoLabelClick);
+  $('#photo-label-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file) onPhotoLabelFile(file);
+  });
   $('#last-lot').addEventListener('click', (e) => { if (e.target.id === 'btn-last-lot') useLastLot(); });
   $('#btn-scan-close').addEventListener('click', closeScanner);
   $('#dlg-scan').addEventListener('close', () => { if (scanStop) { scanStop(); scanStop = null; } });
