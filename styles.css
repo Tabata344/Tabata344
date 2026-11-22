@@ -41,6 +41,9 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+/* evita que o iPhone aumente o texto sozinho e o zoom por toque duplo em botões
+   (o zoom com dois dedos continua funcionando) */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: manipulation; }
 body {
   font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
@@ -203,7 +206,7 @@ dialog::backdrop { background: rgb(0 0 0 / 45%); }
 .check input { width: 20px; height: 20px; margin-top: 2px; flex: none; }
 .grid3 { display: grid; grid-template-columns: 1.5fr .8fr 1fr; gap: 8px; }
 .grid3 label { font-size: .78rem; }
-.grid3 input { padding: 8px; }
+.grid3 input { padding: 8px; font-size: 16px; }
 @media (max-width: 420px) {
   .grid3 { grid-template-columns: 1fr 1fr; }
   .grid3 label:first-child { grid-column: 1 / -1; }
@@ -254,3 +257,7 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: contents; }
   background: var(--ok-bg); border: 1px solid var(--border);
 }
 .last-lot[hidden] { display: none; }
+
+/* iPhone: campos com letra menor que 16px fazem o Safari dar zoom ao tocar
+   e a tela não volta sozinha. Todos os campos ficam com 16px. */
+input, select, textarea { font-size: 16px; }
