@@ -156,24 +156,44 @@ async function onNfeFiles(files) {
 
 function nfeItemHTML(it, i) {
   const known = it.known ? ' · <b>já cadastrado</b>' : '';
+  const expShown = it.expiryRaw ?? (it.expiry ? fmtDate(it.expiry) : '');
   return `
-    <li class="nfe-item ${it.include ? '' : 'off'}" data-i="${i}">
+    <li class="nfe-item ${it.include ? '' : 'off'} ${it.highlight ? 'highlight' : ''}" data-i="${i}">
       <label class="check"><input type="checkbox" data-f="include" ${it.include ? 'checked' : ''}>
         <span class="name">${esc(db.products[it.productId]?.name || it.name)}</span></label>
       <div class="meta">${it.ean ? `EAN ${esc(it.ean)} · ` : `Cód. forn. ${esc(it.code)} · `}Na nota: ${fmtQty(it.nfQty)} ${esc(it.unit)} · ${money(it.total)}${known}</div>
       <div class="grid3">
-        <label>Validade<input type="date" data-f="expiry" value="${esc(it.expiry)}" class="${it.include && !it.expiry ? 'missing' : ''}"></label>
+        <label>Validade<input data-f="expiry" inputmode="numeric" placeholder="dd/mm/aaaa" maxlength="10" value="${esc(expShown)}" class="${it.include && !it.expiry ? 'missing' : ''}"></label>
         <label>Qtd (un.)<input type="number" min="1" step="1" inputmode="numeric" data-f="qty" value="${it.qty}"></label>
         <label>Lote<input data-f="lot" value="${esc(it.lot)}"></label>
       </div>
+      <div class="row wrap nfe-actions">
+        <button type="button" class="btn small secondary" data-act="foto" ${it.busy ? 'disabled' : ''}>${it.busy ? 'Lendo a foto…' : '📷 Foto da validade'}</button>
+        <button type="button" class="btn small secondary" data-act="scan2d">▦ Código 2D</button>
+      </div>
+      ${it.msg ? `<div class="meta ${it.msgBad ? 'summary-bad' : 'summary-ok'}">${esc(it.msg)}</div>` : ''}
     </li>`;
+}
+
+function updateNfeItem(i) {
+  const li = $(`#nfe-preview .nfe-item[data-i="${i}"]`);
+  if (!li) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = nfeItemHTML(nfePending.items[i], i).trim();
+  li.replaceWith(tmp.firstChild);
+  updateNfeSummary();
 }
 
 function renderNfePreview() {
   const el = $('#nfe-preview');
   if (!nfePending) { el.innerHTML = ''; return; }
   const { notes, items } = nfePending;
-  el.innerHTML = notes.map((n, ni) => `
+  el.innerHTML = `
+    <div class="panel nfe-bip">
+      <p class="muted small">Para cada produto: pegue a embalagem, toque em <b>▦ Bipar produto</b> para achá-lo na lista
+        e depois em <b>📷 Foto da validade</b>. Ou use os botões direto em cada item.</p>
+      <button type="button" class="btn" id="nfe-bip">▦ Bipar produto</button>
+    </div>` + notes.map((n, ni) => `
     <div class="panel">
       <div class="panel-head"><h3>NF ${esc(n.number)} — ${esc(n.supplier)}</h3><span class="muted small">${fmtDate(n.date)}</span></div>
       ${n.duplicate ? '<p class="warn small">⚠️ Esta nota já foi importada. Os itens vieram desmarcados.</p>' : ''}
@@ -203,17 +223,127 @@ function updateNfeSummary() {
 }
 
 function onNfeInput(e) {
+  // campo que já saiu da tela (o item foi redesenhado): não sobrescreve o que foi lido
+  if (!e.target.isConnected) return;
   const li = e.target.closest('.nfe-item');
   if (!li || !nfePending) return;
   const it = nfePending.items[Number(li.dataset.i)];
   const f = e.target.dataset.f;
   if (f === 'include') { it.include = e.target.checked; li.classList.toggle('off', !it.include); }
   else if (f === 'qty') it.qty = parseInt(e.target.value, 10) || 0;
-  else if (f === 'expiry') it.expiry = e.target.value;
-  else if (f === 'lot') it.lot = e.target.value.trim();
+  else if (f === 'expiry') {
+    const m = maskDate(e.target.value);
+    if (m !== e.target.value) e.target.value = m;
+    it.expiryRaw = m;
+    it.expiry = readExpiry(m).iso;
+  } else if (f === 'lot') it.lot = e.target.value.trim();
   const exp = li.querySelector('[data-f=expiry]');
   exp.classList.toggle('missing', it.include && !it.expiry);
   updateNfeSummary();
+}
+
+/* ---------- validade e lote de cada item da nota (foto ou código 2D) ---------- */
+let nfePhotoTarget = null; // item que vai receber a foto
+
+/** Mesmo produto? Compara só a parte que identifica o produto: ignora o dígito de
+ * embalagem do GTIN-14 (caixa "1789…" = unidade "789…") e o dígito verificador. */
+function sameGtin(a, b) {
+  const core = (x) => {
+    const d = String(x || '').replace(/\D/g, '');
+    if (d.length < 8) return '';
+    return d.padStart(14, '0').slice(1, 13);
+  };
+  const ca = core(a);
+  return !!ca && ca === core(b);
+}
+
+function setNfeItem(i, changes) {
+  // se a pessoa está digitando neste item, confirma o digitado ANTES de aplicar a leitura
+  const li = $(`#nfe-preview .nfe-item[data-i="${i}"]`);
+  if (li && li.contains(document.activeElement)) document.activeElement.blur();
+  Object.assign(nfePending.items[i], changes);
+  updateNfeItem(i);
+}
+
+function onNfeItemPhotoClick(i) {
+  if (typeof cloudConnected !== 'function' || !cloudConnected()) {
+    setNfeItem(i, { msg: 'A leitura por foto usa a nuvem: entre na sua conta em Ajustes.', msgBad: true });
+    return;
+  }
+  if (!navigator.onLine) { setNfeItem(i, { msg: 'Sem internet agora: digite a validade.', msgBad: true }); return; }
+  nfePhotoTarget = i;
+  $('#nfe-photo-file').click();
+}
+
+async function onNfePhotoFile(file) {
+  const i = nfePhotoTarget;
+  const pending = nfePending;
+  if (i == null || !pending) return;
+  const it = pending.items[i];
+  setNfeItem(i, { busy: true, msg: 'Lendo a foto… pode levar alguns segundos.', msgBad: false });
+  try {
+    const { data, mediaType } = await shrinkImage(file);
+    const r = await readLabelPhoto(data, mediaType);
+    if (nfePending !== pending) return; // a lista foi descartada
+    const changes = { busy: false };
+    if (r.expiry) { changes.expiry = r.expiry; changes.expiryRaw = fmtDate(r.expiry); }
+    if (r.lot) changes.lot = r.lot;
+    const parts = [r.expiry && `validade ${fmtDate(r.expiry)}`, r.lot && `lote ${r.lot}`].filter(Boolean);
+    const other = r.barcode && it.ean && !sameGtin(r.barcode, it.ean);
+    if (!r.expiry) {
+      changes.msg = `Não consegui ler a validade${parts.length ? ` (li ${parts.join(' · ')})` : ''}. ${r.note || 'Tente com mais luz e sem reflexo, ou digite.'}`;
+      changes.msgBad = true;
+    } else {
+      changes.msg = `Lido da foto: ${parts.join(' · ')}. `
+        + (other ? `Atenção: a foto parece ser de outro produto (código ${r.barcode}).`
+          : r.confidence === 'high' ? 'Confira.' : 'Confira com atenção!')
+        + (r.note ? ` ${r.note}` : '');
+      changes.msgBad = other || r.confidence === 'low';
+    }
+    setNfeItem(i, changes);
+  } catch (e) {
+    if (nfePending === pending) setNfeItem(i, { busy: false, msg: e.message || 'Não foi possível ler a foto.', msgBad: true });
+  }
+}
+
+/** Código 2D (GS1) lido para um item específico da nota. */
+function applyNfe2D(i, code) {
+  const it = nfePending.items[i];
+  const g = parseGS1(code);
+  if (!g) { setNfeItem(i, { msg: 'Esse código não traz validade. Use a 📷 Foto da validade.', msgBad: true }); return; }
+  if (it.ean && !sameGtin(g.gtin, it.ean)) {
+    setNfeItem(i, { msg: `Esse código 2D é de outro produto (código ${g.barcode}). Nada foi preenchido.`, msgBad: true });
+    return;
+  }
+  const changes = {};
+  if (g.expiry) { changes.expiry = g.expiry; changes.expiryRaw = fmtDate(g.expiry); }
+  if (g.lot) changes.lot = g.lot;
+  const parts = [g.expiry && `validade ${fmtDate(g.expiry)}`, g.lot && `lote ${g.lot}`].filter(Boolean);
+  changes.msg = parts.length
+    ? `Lido do código 2D: ${parts.join(' · ')}.${it.ean ? '' : ' A nota não tem o código deste item: confira se é o produto certo.'}`
+    : 'O código 2D não tem validade nem lote. Use a foto.';
+  changes.msgBad = !parts.length;
+  setNfeItem(i, changes);
+}
+
+/** "Bipar produto": acha o produto bipado na lista da nota. */
+function nfeLocate(code) {
+  if (!nfePending) return;
+  const g = parseGS1(code);
+  const gtin = g ? g.gtin : String(code).trim();
+  const matches = nfePending.items.map((it, i) => (sameGtin(it.ean, gtin) ? i : -1)).filter((i) => i >= 0);
+  if (!matches.length) { toast('Esse produto não está nesta nota.'); return; }
+  // prefere um item que ainda não tem validade
+  const i = matches.find((k) => !nfePending.items[k].expiry) ?? matches[0];
+  nfePending.items.forEach((it, k) => { if (it.highlight && k !== i) { it.highlight = false; updateNfeItem(k); } });
+  if (g && (g.expiry || g.lot)) {
+    nfePending.items[i].highlight = true;
+    applyNfe2D(i, code);
+  } else {
+    setNfeItem(i, { highlight: true, msg: 'Encontrado! Agora toque em 📷 Foto da validade.', msgBad: false });
+  }
+  $(`#nfe-preview .nfe-item[data-i="${i}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (navigator.vibrate) navigator.vibrate(60);
 }
 
 function confirmNfe() {
@@ -459,6 +589,19 @@ function bindImport() {
   nfe.addEventListener('click', (e) => {
     if (e.target.id === 'nfe-confirm') confirmNfe();
     if (e.target.id === 'nfe-cancel') { nfePending = null; renderNfePreview(); }
+    if (e.target.id === 'nfe-bip') openScanner(nfeLocate);
+    const act = e.target.closest('[data-act]');
+    const li = e.target.closest('.nfe-item');
+    if (act && li && nfePending) {
+      const i = Number(li.dataset.i);
+      if (act.dataset.act === 'foto') onNfeItemPhotoClick(i);
+      if (act.dataset.act === 'scan2d') openScanner((code) => applyNfe2D(i, code));
+    }
+  });
+  $('#nfe-photo-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file) onNfePhotoFile(file);
   });
 
   $('#sheet-file').addEventListener('change', (e) => {

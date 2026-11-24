@@ -24,6 +24,9 @@ Funciona no navegador do celular, pode ser instalado na tela inicial e funciona 
 - **Backup**: exporta e restaura em JSON e exporta lotes em CSV (abre no Excel).
 - **Importar nota fiscal (NF-e XML)** do fornecedor: produtos, quantidade e custo vêm da nota.
   - Lote e validade vêm preenchidos quando a nota traz o grupo `rastro`; senão, basta digitar a data.
+  - Em cada item da nota: **📷 Foto da validade** (a IA lê validade e lote daquele produto) e **▦ Código 2D**.
+  - **▦ Bipar produto**: bipa o código de barras da embalagem e o app acha o produto na lista da nota (também
+    reconhece a caixa DUN-14 da nota como o mesmo produto da unidade).
   - Converte caixa em unidades (ex.: 2 CX = 24 UN) usando a unidade tributável da nota.
   - Avisa quando a mesma nota é importada duas vezes e guarda o fornecedor e o nº da NF no lote (útil para devolução).
 - **Importar planilha** (Excel `.xlsx` ou CSV, inclusive CSV "ANSI" de sistemas antigos):

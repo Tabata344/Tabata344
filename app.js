@@ -845,7 +845,7 @@ async function onPhotoLabelFile(file) {
   }
 }
 
-async function openScanner() {
+async function openScanner(onCode = applyScannedCode) {
   const dlg = $('#dlg-scan');
   const video = $('#scan-video');
   const status = $('#scan-status');
@@ -854,7 +854,7 @@ async function openScanner() {
 
   const done = (code) => {
     closeScanner();
-    applyScannedCode(code);
+    onCode(code);
     if (navigator.vibrate) navigator.vibrate(80);
   };
 
@@ -1029,7 +1029,7 @@ function bind() {
       if (p) fillFromProduct(p);
     }
   });
-  $('#btn-scan').addEventListener('click', openScanner);
+  $('#btn-scan').addEventListener('click', () => openScanner());
   $('#btn-photo-label').addEventListener('click', onPhotoLabelClick);
   $('#photo-hint').addEventListener('click', (e) => { if (e.target.id === 'btn-photo-undo') undoPhotoRead(); });
   bindFotos();

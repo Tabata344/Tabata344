@@ -168,6 +168,8 @@ function updateFotosSummary() {
 }
 
 function onFotosInput(e) {
+  // campo que já saiu da tela (o item foi redesenhado): não sobrescreve o que foi lido
+  if (!e.target.isConnected) return;
   const li = e.target.closest('.foto-item');
   if (!li || !batch) return;
   const it = batch.items[Number(li.dataset.i)];

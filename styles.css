@@ -277,3 +277,9 @@ input, select, textarea { font-size: 16px; }
 .foto-info { flex: 1; min-width: 0; }
 .foto-item .grid2 input { padding: 8px; }
 #photo-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+/* Itens da nota: foto / código 2D / bipar */
+.nfe-actions { gap: 6px; }
+.nfe-item.highlight { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
+.nfe-bip { display: flex; flex-direction: column; gap: 8px; }
+.nfe-bip p { margin: 0; }
