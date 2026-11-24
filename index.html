@@ -60,6 +60,7 @@
         <div class="row wrap">
           <a class="btn secondary" href="#importar/nfe">🧾 Nota fiscal (XML)</a>
           <a class="btn secondary" href="#importar/planilha">📄 Planilha</a>
+          <a class="btn secondary" href="#importar/fotos">📷 Várias fotos</a>
         </div>
       </div>
       <form id="form-novo" class="panel form" autocomplete="off">
@@ -97,7 +98,7 @@
         <div class="photo-label">
           <button type="button" class="btn secondary" id="btn-photo-label">📷 Ler validade e lote pela foto</button>
           <input type="file" id="photo-label-file" accept="image/*" capture="environment" hidden>
-          <p class="hint" id="photo-hint"></p>
+          <div class="hint" id="photo-hint"></div>
         </div>
         <div class="grid2">
           <label>Lote
@@ -119,6 +120,7 @@
       <div class="chips" id="import-tabs">
         <a class="chip" href="#importar/nfe" data-t="nfe">🧾 Nota fiscal (XML)</a>
         <a class="chip" href="#importar/planilha" data-t="planilha">📄 Planilha</a>
+        <a class="chip" href="#importar/fotos" data-t="fotos">📷 Várias fotos</a>
       </div>
 
       <div id="import-nfe" class="view">
@@ -146,6 +148,19 @@
           <a class="small" href="exemplos/modelo-planilha.csv" download>Baixar modelo de planilha</a>
         </div>
         <div id="sheet-preview" class="view"></div>
+      </div>
+
+      <div id="import-fotos" class="view" hidden>
+        <div class="panel form">
+          <h2>Várias fotos de uma vez</h2>
+          <p class="muted small">Tire uma foto do <b>verso</b> de cada produto, mostrando o <b>código de barras</b> e a
+            <b>validade</b>. Depois escolha todas as fotos aqui: a IA lê cada uma e você confere a lista antes de salvar.
+            Cada foto conta como 1 leitura do limite diário da loja.</p>
+          <label class="btn file">Escolher fotos
+            <input type="file" id="fotos-file" accept="image/*" multiple hidden>
+          </label>
+        </div>
+        <div id="fotos-preview" class="view"></div>
       </div>
     </section>
 
@@ -263,6 +278,7 @@
   <script src="config.js"></script>
   <script src="importar.js"></script>
   <script src="nuvem.js"></script>
+  <script src="fotos.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

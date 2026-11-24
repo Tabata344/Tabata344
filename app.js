@@ -500,6 +500,8 @@ function onBarcodeChange() {
     // outro produto: validade e lote do anterior não valem mais
     formCode = code;
     scanExtra = '';
+    if (photoReading) { photoRun++; endPhotoReading(); }
+    photoUndo = null;
     setPhotoHint('');
     f.expiry.value = '';
     f.lot.value = '';
@@ -732,11 +734,16 @@ function applyScannedCode(code) {
 }
 
 /* ---------- validade e lote pela foto (IA) ---------- */
-let photoLot = ''; // lote preenchido pela última foto (para trocar se vier outra foto)
+let photoLot = '';       // lote preenchido pela última foto (para trocar se vier outra foto)
+let photoRun = 0;        // cada leitura tem um número; cancelar = trocar o número
+let photoReading = false;
+let photoUndo = null;    // como o formulário estava antes da última foto
+const PHOTO_BTN = '📷 Ler validade e lote pela foto';
 
-function setPhotoHint(msg, bad = false) {
+function setPhotoHint(msg, bad = false, undo = false) {
   const el = $('#photo-hint');
-  el.textContent = msg;
+  el.innerHTML = msg ? `<span>${esc(msg)}</span>`
+    + (undo ? ' <button type="button" class="btn small secondary" id="btn-photo-undo">Desfazer</button>' : '') : '';
   el.classList.toggle('summary-bad', bad);
 }
 
@@ -758,7 +765,18 @@ async function shrinkImage(file, max = 1280, quality = 0.85) {
   }
 }
 
+function endPhotoReading() {
+  photoReading = false;
+  $('#btn-photo-label').textContent = PHOTO_BTN;
+}
+
 function onPhotoLabelClick() {
+  if (photoReading) { // o botão vira "Cancelar leitura" enquanto lê
+    photoRun++;
+    endPhotoReading();
+    setPhotoHint('Leitura cancelada.');
+    return;
+  }
   if (typeof cloudConnected !== 'function' || !cloudConnected()) {
     setPhotoHint('A leitura por foto usa a nuvem: entre na sua conta em Ajustes.', true);
     return;
@@ -767,16 +785,42 @@ function onPhotoLabelClick() {
   $('#photo-label-file').click();
 }
 
+function undoPhotoRead() {
+  if (!photoUndo) return;
+  const f = $('#form-novo');
+  const u = photoUndo;
+  photoUndo = null;
+  f.barcode.value = u.barcode;
+  f.name.value = u.name;
+  f.category.value = u.category;
+  f.expiry.value = u.expiry;
+  f.lot.value = u.lot;
+  formCode = u.barcode.trim();
+  photoLot = '';
+  updateExpiryHint();
+  if (!formCode) setProductHint('');
+  setPhotoHint('Leitura desfeita.');
+}
+
 async function onPhotoLabelFile(file) {
-  const btn = $('#btn-photo-label');
-  const label = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Lendo a foto…';
-  setPhotoHint('');
+  const run = ++photoRun;
+  photoReading = true;
+  $('#btn-photo-label').textContent = '✕ Cancelar leitura';
+  setPhotoHint('Lendo a foto… pode levar alguns segundos.');
   try {
     const { data, mediaType } = await shrinkImage(file);
+    if (run !== photoRun) return;
     const r = await readLabelPhoto(data, mediaType);
+    if (run !== photoRun) return; // cancelada enquanto lia
+    endPhotoReading();
     const f = $('#form-novo');
+    photoUndo = { barcode: f.barcode.value, name: f.name.value, category: f.category.value, expiry: f.expiry.value, lot: f.lot.value };
+    // código de barras lido na foto, se o campo estiver vazio (acha o produto / busca o nome)
+    if (!f.barcode.value.trim() && r.barcode) {
+      f.barcode.value = r.barcode;
+      onBarcodeChange();
+    }
+    if (!f.name.value.trim() && r.product_name && !findProductByBarcode(f.barcode.value.trim())) f.name.value = r.product_name;
     if (r.expiry) { f.expiry.value = fmtDate(r.expiry); updateExpiryHint(); }
     if (r.lot) f.lot.value = r.lot;
     else if (photoLot && f.lot.value === photoLot) f.lot.value = ''; // lote da foto anterior, não desta
@@ -788,17 +832,16 @@ async function onPhotoLabelFile(file) {
     ].filter(Boolean);
     if (r.expiry) {
       setPhotoHint(`Lido da foto: ${parts.join(' · ')}. ${r.confidence === 'high' ? 'Confira antes de salvar.' : 'Confira com atenção!'} ${r.note || ''}`.trim(),
-        r.confidence === 'low');
+        r.confidence === 'low', true);
       f.qty.focus();
     } else {
       setPhotoHint(`Não consegui ler a validade nessa foto${parts.length ? ` (li ${parts.join(' · ')})` : ''}. `
-        + (r.note || 'Tente de novo com mais luz, sem reflexo e mais perto, ou digite a data.'), true);
+        + (r.note || 'Tente de novo com mais luz, sem reflexo e mais perto, ou digite a data.'), true, parts.length > 0);
     }
   } catch (e) {
-    setPhotoHint(e.message || 'Não foi possível ler a foto. Digite a validade.', true);
+    if (run === photoRun) setPhotoHint(e.message || 'Não foi possível ler a foto. Digite a validade.', true);
   } finally {
-    btn.disabled = false;
-    btn.textContent = label;
+    if (run === photoRun && photoReading) endPhotoReading();
   }
 }
 
@@ -988,6 +1031,8 @@ function bind() {
   });
   $('#btn-scan').addEventListener('click', openScanner);
   $('#btn-photo-label').addEventListener('click', onPhotoLabelClick);
+  $('#photo-hint').addEventListener('click', (e) => { if (e.target.id === 'btn-photo-undo') undoPhotoRead(); });
+  bindFotos();
   $('#photo-label-file').addEventListener('change', (e) => {
     const file = e.target.files[0];
     e.target.value = '';

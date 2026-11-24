@@ -32,6 +32,8 @@ Como reconhecer:
 - Validade: VAL, VALIDADE, V, VENC, VENCIMENTO, CONSUMIR ATÉ, CONSUMIR PREFERENCIALMENTE ANTES DE, BEST BEFORE, EXP.
 - Fabricação: FAB, F, FABRICAÇÃO, P, PROD. Não confunda fabricação com validade.
 - Lote: L, LOTE, LOT. Copie exatamente os caracteres do lote (letras, números, dois-pontos, espaços), sem o prefixo "L"/"LOTE".
+- Código de barras: se aparecer, copie os dígitos impressos logo abaixo das barras (EAN/GTIN, 8 a 14 dígitos), sem espaços.
+- Nome do produto: se aparecer, escreva como na embalagem (produto, marca e tamanho, ex.: "Chocolate ao leite Lacta 80g").
 
 Datas no padrão brasileiro (dia antes do mês): 171226 (DDMMAA), 17/12/26, 17.12.2026, 17 DEZ 26, DEZ/26, 12/26 (mês/ano).
 Meses abreviados: JAN FEV MAR ABR MAI JUN JUL AGO SET OUT NOV DEZ.
@@ -55,8 +57,10 @@ export const LABEL_SCHEMA = {
     manufactured: { type: "string", description: "Fabricação AAAA-MM-DD se impressa, ou vazio" },
     confidence: { type: "string", enum: ["high", "medium", "low"] },
     note: { type: "string", description: "Aviso curto em português para o funcionário, ou vazio" },
+    barcode: { type: "string", description: "Dígitos impressos abaixo do código de barras, ou vazio" },
+    product_name: { type: "string", description: "Nome do produto visível na embalagem, ou vazio" },
   },
-  required: ["readable", "expiry_text", "expiry", "month_year_only", "lot", "manufactured", "confidence", "note"],
+  required: ["readable", "expiry_text", "expiry", "month_year_only", "lot", "manufactured", "confidence", "note", "barcode", "product_name"],
 } as const;
 
 export interface LabelResult {
@@ -67,6 +71,17 @@ export interface LabelResult {
   lot: string;
   confidence: "high" | "medium" | "low";
   note: string;
+  barcode: string;
+  product_name: string;
+}
+
+/** Confere o dígito verificador do EAN/GTIN (evita número lido errado). */
+export function gtinValid(code: string): boolean {
+  if (!/^\d{8}$|^\d{12,14}$/.test(code)) return false;
+  const d = code.split("").map(Number);
+  const check = d.pop()!;
+  const sum = d.reverse().reduce((acc, n, i) => acc + n * (i % 2 === 0 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === check;
 }
 
 function json(status: number, body: unknown): Response {
@@ -104,7 +119,9 @@ export function normalizeResult(raw: unknown, today: string): LabelResult {
       note = note || "Não consegui ter certeza do ano. Confira a data.";
     }
   }
-  const lot = str(r.lot, 40).replace(/^(lote|lot|l)\s*[:.\-]?\s*/i, "").trim();
+  // tira só o prefixo explícito ("LOTE 99", "L: JC10"); "LT9" e "L2311A" ficam como estão
+  const lot = str(r.lot, 40).replace(/^(lote|lot)\b\s*[:.\-]?\s*|^l\s*[:.\-]\s*/i, "").trim();
+  const digits = str(r.barcode, 20).replace(/\D/g, "");
   return {
     readable: r.readable === true && !!expiry,
     expiry,
@@ -113,6 +130,8 @@ export function normalizeResult(raw: unknown, today: string): LabelResult {
     lot,
     confidence,
     note,
+    barcode: gtinValid(digits) ? digits : "",
+    product_name: str(r.product_name, 80),
   };
 }
 

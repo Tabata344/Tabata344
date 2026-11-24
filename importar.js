@@ -436,10 +436,12 @@ function confirmSheet() {
 
 /* ---------- view ---------- */
 function renderImportar(arg) {
-  const tab = arg === 'planilha' ? 'planilha' : 'nfe';
+  const tab = ['planilha', 'fotos'].includes(arg) ? arg : 'nfe';
   $$('#import-tabs .chip').forEach((c) => c.classList.toggle('active', c.dataset.t === tab));
   $('#import-nfe').hidden = tab !== 'nfe';
   $('#import-planilha').hidden = tab !== 'planilha';
+  $('#import-fotos').hidden = tab !== 'fotos';
+  if (tab === 'fotos') renderFotos();
   fillDatalists();
   renderNfePreview();
   renderNfeHistory();

@@ -91,6 +91,11 @@ conferido (datas impossíveis ou anos fora do esperado são descartados). A pess
 - Segredos da função (Supabase → Edge Functions → Secrets): `ANTHROPIC_API_KEY` (obrigatório),
   `LABEL_MODEL` (padrão `claude-opus-5-5`; ex.: `claude-haiku-5-5` para custo menor) e `LABEL_EFFORT` (padrão `low`).
 - A chave da Anthropic fica só no Supabase, nunca no app.
+- **Cancelar / Desfazer**: enquanto lê, o botão vira "Cancelar leitura"; depois de preencher, "Desfazer" volta o formulário ao que era.
+- **Várias fotos de uma vez** (Novo → 📷 Várias fotos): cada foto mostra o verso do produto (código de barras + validade).
+  A IA lê código, validade, lote e nome; o app monta uma lista para conferir e salva tudo junto. Até 30 fotos por vez,
+  3 leituras simultâneas; o nome vem do cadastro, da base pública ou da própria embalagem; código lido com dígito
+  verificador errado é descartado.
 
 ## Limitações atuais
 
