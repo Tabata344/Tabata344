@@ -1,0 +1,12 @@
+{
+  "name": "Lance Fotos",
+  "short_name": "Lance",
+  "description": "Fotos de corrida e esportes: ache as suas pelo tempo de prova, mesmo sem o número de peito.",
+  "lang": "pt-BR",
+  "start_url": "./#atleta",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0f14",
+  "theme_color": "#0b0f14",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

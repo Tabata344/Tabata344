@@ -1,3 +1,5 @@
+> Este repositório também contém o **Lance Fotos**, app de fotos esportivas: veja [`fotos-esportivas/`](fotos-esportivas/README.md).
+
 # Validade Certa
 
 App (PWA) de **controle de validade de produtos para comércio**: mercados, padarias, farmácias e distribuidoras.

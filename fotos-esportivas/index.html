@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Lance Fotos</title>
+  <meta name="description" content="Fotos de corrida e esportes: ache as suas pelo tempo de prova, mesmo sem o número de peito.">
+  <meta name="theme-color" content="#0b0f14">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#atleta" class="logo"><span class="logo-mark">L</span> Lance</a>
+    <select id="evento-sel" aria-label="Evento"></select>
+  </header>
+
+  <nav class="tabs">
+    <a href="#atleta" data-v="atleta">🏃 Achar minhas fotos</a>
+    <a href="#minhas" data-v="minhas">🎒 Compradas <b id="n-compradas"></b></a>
+    <a href="#fotografo" data-v="fotografo">📸 Fotógrafo</a>
+  </nav>
+
+  <main>
+    <!-- ================= ATLETA ================= -->
+    <section id="view-atleta" class="view" hidden>
+      <div id="sem-evento" class="vazio" hidden>
+        <p>Nenhum evento ainda.</p>
+        <button class="btn" id="btn-demo-1">Carregar evento de demonstração</button>
+        <p class="muted small">Ou entre como <a href="#fotografo">fotógrafo</a> e crie um evento com suas fotos.</p>
+      </div>
+
+      <div id="busca" class="panel">
+        <h2>Ache suas fotos</h2>
+        <p class="muted small">Combine quantas pistas quiser. Quanto mais pistas, melhor o resultado.</p>
+        <div class="metodos">
+          <label class="metodo">
+            <span class="metodo-tit">#️⃣ Número de peito</span>
+            <input id="b-peito" inputmode="numeric" placeholder="ex.: 1234" autocomplete="off">
+          </label>
+          <div class="metodo">
+            <span class="metodo-tit">⏱️ Tempo de prova <em class="tag">sem número</em></span>
+            <div class="row2">
+              <label>Hora da sua largada<input id="b-largada" type="time" step="1"></label>
+              <label>Tempo líquido<input id="b-liquido" placeholder="h:mm:ss" inputmode="numeric"></label>
+            </div>
+            <p class="muted small">Pelo seu ritmo, o app calcula quando você passou por cada fotógrafo.
+              Funciona com o peito dobrado, coberto pelo casaco ou na foto de costas.</p>
+          </div>
+          <label class="metodo">
+            <span class="metodo-tit">🛰️ Arquivo do relógio (GPX) <em class="tag">mais preciso</em></span>
+            <input id="b-gpx" type="file" accept=".gpx,application/gpx+xml,application/xml">
+            <span class="muted small">Exporte do Strava, Garmin, Coros ou Polar. Fica só no seu aparelho.</span>
+          </label>
+        </div>
+        <div class="acoes">
+          <button class="btn" id="btn-buscar">Buscar</button>
+          <button class="btn ghost" id="btn-limpar">Limpar</button>
+        </div>
+      </div>
+
+      <div id="resultado" hidden>
+        <div class="panel-head">
+          <h2 id="res-tit"></h2>
+          <label class="switch"><input type="checkbox" id="so-melhores" checked> só a melhor de cada sequência</label>
+        </div>
+        <div id="passagens" class="passagens"></div>
+        <div id="grade" class="grade"></div>
+      </div>
+
+      <details class="panel privacidade">
+        <summary>🙈 Não quero aparecer nas fotos deste evento</summary>
+        <p class="small">Suas fotos deixam de aparecer para outras pessoas na busca. Só você, buscando pelo seu número,
+          continua vendo.</p>
+        <div class="row-inline">
+          <input id="ocultar-num" inputmode="numeric" placeholder="Seu nº de peito">
+          <button class="btn ghost" id="btn-ocultar">Ocultar</button>
+        </div>
+        <p id="ocultos-lista" class="muted small"></p>
+      </details>
+    </section>
+
+    <!-- ================= COMPRADAS ================= -->
+    <section id="view-minhas" class="view" hidden>
+      <div class="panel">
+        <h2>Fotos compradas</h2>
+        <p class="muted small">Original em alta, sem marca d'água. Toque para baixar ou gerar o card para os stories.</p>
+        <div id="grade-compradas" class="grade"></div>
+      </div>
+    </section>
+
+    <!-- ================= FOTÓGRAFO ================= -->
+    <section id="view-fotografo" class="view" hidden>
+      <div class="panel" id="f-eventos">
+        <div class="panel-head">
+          <h2>Seus eventos</h2>
+          <button class="btn small" id="btn-novo-evento">+ Novo evento</button>
+        </div>
+        <ul id="lista-eventos" class="lista"></ul>
+        <button class="btn ghost small" id="btn-demo-2">Carregar evento de demonstração</button>
+      </div>
+
+      <form class="panel" id="form-evento" hidden>
+        <h2 id="form-evento-tit">Novo evento</h2>
+        <label>Nome<input name="nome" required placeholder="Meia Maratona do Rio"></label>
+        <div class="row2">
+          <label>Data<input name="data" type="date" required></label>
+          <label>Modalidade
+            <select name="modalidade">
+              <option>Corrida</option><option>Ciclismo</option><option>Triathlon</option>
+              <option>Trail</option><option>Natação</option><option>Outro</option>
+            </select>
+          </label>
+        </div>
+        <div class="row2">
+          <label>Distância total (km)<input name="distanciaKm" type="number" step="0.1" min="0.1" required value="10"></label>
+          <label>Seu nome / estúdio<input name="fotografo" placeholder="Foco Total"></label>
+        </div>
+        <div class="row2">
+          <label>Preço por foto (R$)<input name="preco" type="number" step="0.5" min="0" value="19.90"></label>
+          <label>Teto: todas as suas fotos (R$)<input name="precoPacote" type="number" step="0.5" min="0" value="59.90"></label>
+        </div>
+        <fieldset>
+          <legend>Pontos de foto no percurso</legend>
+          <p class="muted small">Onde você (ou cada fotógrafo da equipe) fica. Coordenadas são opcionais: se as fotos tiverem GPS, são
+            preenchidas sozinhas.</p>
+          <div id="pontos-form"></div>
+          <button type="button" class="btn ghost small" id="btn-add-ponto">+ Ponto</button>
+        </fieldset>
+        <div class="acoes">
+          <button class="btn">Salvar evento</button>
+          <button type="button" class="btn ghost" id="btn-cancelar-evento">Cancelar</button>
+        </div>
+      </form>
+
+      <div id="f-detalhe" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <h2 id="f-tit"></h2>
+            <div>
+              <button class="btn ghost small" id="btn-editar-evento">Editar</button>
+              <button class="btn ghost small perigo" id="btn-apagar-evento">Apagar</button>
+            </div>
+          </div>
+          <div class="stats" id="f-stats"></div>
+        </div>
+
+        <div class="panel">
+          <h3>1. Acerte o relógio da câmera <span class="tag">evita foto perdida</span></h3>
+          <p class="small">Câmeras atrasam ou adiantam. Fotografe este relógio com cada câmera e envie a foto aqui:
+            o app calcula a diferença e corrige o horário de todas as fotos dessa câmera.</p>
+          <div class="relogio" id="relogio">--:--:--</div>
+          <div class="row2">
+            <label>Foto do relógio<input type="file" id="sync-foto" accept="image/jpeg"></label>
+            <label>Hora que aparece na foto<input type="time" step="1" id="sync-hora"></label>
+          </div>
+          <button class="btn small" id="btn-sync">Calcular diferença</button>
+          <ul id="sync-lista" class="lista small"></ul>
+        </div>
+
+        <div class="panel">
+          <h3>2. Envie as fotos</h3>
+          <div class="row2">
+            <label>Ponto do percurso<select id="up-ponto"></select></label>
+            <label>Fotos (JPEG)<input type="file" id="up-fotos" accept="image/jpeg,image/*" multiple></label>
+          </div>
+          <div id="up-progresso" class="progresso" hidden><div></div><span></span></div>
+          <p class="muted small">No envio, o app lê o horário de cada foto, mede a nitidez, separa as tremidas e escolhe a melhor de cada
+            sequência (rajada). Nada sai do aparelho.</p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h3>3. Marcação rápida de números</h3>
+            <span class="muted small" id="marca-cont"></span>
+          </div>
+          <p class="muted small">Digite os números que aparecem e tecle Enter. Vários números: separe por espaço. Foto sem número legível:
+            deixe em branco; ela ainda é achada pelo tempo de prova.</p>
+          <div id="marcacao"></div>
+        </div>
+
+        <div class="panel">
+          <h3>Fotos do evento</h3>
+          <div class="chips" id="f-filtros">
+            <button class="chip on" data-f="todas">Todas</button>
+            <button class="chip" data-f="melhores">Melhores</button>
+            <button class="chip" data-f="desfocadas">Tremidas</button>
+            <button class="chip" data-f="sem">Sem número</button>
+          </div>
+          <div id="f-grade" class="grade pequena"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Carrinho -->
+  <button id="btn-carrinho" class="fab" hidden>🛒 <span id="carrinho-n"></span></button>
+  <dialog id="dlg-carrinho">
+    <h2>Carrinho</h2>
+    <ul id="carrinho-itens" class="lista"></ul>
+    <div id="carrinho-total"></div>
+    <div class="acoes">
+      <button class="btn" id="btn-pagar">Pagar (simulado)</button>
+      <button class="btn ghost" data-close>Continuar escolhendo</button>
+    </div>
+  </dialog>
+
+  <!-- Foto -->
+  <dialog id="dlg-foto" class="dlg-foto">
+    <img id="foto-img" alt="">
+    <div class="foto-info" id="foto-info"></div>
+    <div class="acoes" id="foto-acoes"></div>
+  </dialog>
+
+  <!-- Card para stories -->
+  <dialog id="dlg-card" class="dlg-card">
+    <h2>Card para stories</h2>
+    <div class="row2">
+      <label>Seu nome<input id="card-nome" placeholder="Ana"></label>
+      <label>Tempo<input id="card-tempo" placeholder="0:52:10"></label>
+    </div>
+    <canvas id="card-canvas" width="1080" height="1920"></canvas>
+    <div class="acoes">
+      <button class="btn" id="btn-card-baixar">Baixar imagem</button>
+      <button class="btn ghost" id="btn-card-share">Compartilhar</button>
+      <button class="btn ghost" data-close>Fechar</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="db.js"></script>
+  <script src="exif.js"></script>
+  <script src="analise.js"></script>
+  <script src="demo.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
