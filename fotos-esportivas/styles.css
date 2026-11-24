@@ -5,10 +5,14 @@
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme="dark"]) {
     --bg: #f3f5f8; --panel: #fff; --panel2: #eef1f5; --line: #dde3ea;
     --txt: #111821; --muted: #5d6a7a; --acc: #9bd000; --acc-txt: #0b0f14; color-scheme: light;
   }
+}
+:root[data-theme="light"] {
+    --bg: #f3f5f8; --panel: #fff; --panel2: #eef1f5; --line: #dde3ea;
+    --txt: #111821; --muted: #5d6a7a; --acc: #9bd000; --acc-txt: #0b0f14; color-scheme: light;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }

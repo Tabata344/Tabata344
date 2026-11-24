@@ -595,7 +595,13 @@ function ligar() {
   $('#btn-add-ponto').addEventListener('click', () => addPontoForm());
   $('#form-evento').addEventListener('submit', salvarFormEvento);
   $('#btn-apagar-evento').addEventListener('click', async () => {
-    if (!confirm(`Apagar "${S.ev.nome}" e todas as ${S.fotos.length} fotos? Não dá para desfazer.`)) return;
+    const b = $('#btn-apagar-evento');
+    if (!b.dataset.conf) {
+      b.dataset.conf = '1'; b.textContent = `Confirmar: apagar ${S.fotos.length} fotos`;
+      setTimeout(() => { delete b.dataset.conf; b.textContent = 'Apagar'; }, 4000);
+      return;
+    }
+    delete b.dataset.conf; b.textContent = 'Apagar';
     await DB.apagarEvento(S.ev.id);
     S.eventos = S.eventos.filter((e) => e.id !== S.ev.id);
     await escolherEvento(S.eventos[0]?.id);
