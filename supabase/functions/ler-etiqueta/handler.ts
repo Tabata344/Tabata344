@@ -4,6 +4,9 @@
 // limite diário no banco -> manda a foto ao Claude pedindo um JSON fixo ->
 // valida o resultado -> registra modelo e tokens (para medir custo) -> devolve.
 //
+// Login: conferido pelo banco (RPC consume_label_read roda como o usuário do token).
+// Publicada com verify_jwt = false porque o projeto usa chaves de login ES256.
+//
 // Segredos/variáveis (painel do Supabase > Edge Functions > Secrets):
 //   ANTHROPIC_API_KEY  (obrigatório; nunca vai para o app)
 //   LABEL_MODEL        (opcional; padrão claude-opus-5-5)
@@ -152,6 +155,8 @@ export async function handle(req: Request): Promise<Response> {
   const { data: readId, error: quotaError } = await sb.rpc("consume_label_read", { p_store: storeId });
   if (quotaError) {
     const msg = quotaError.message || "Sem permissão.";
+    // sem login válido o banco nem deixa chamar a função (permission denied / JWT)
+    if (/permission denied|jwt|login/i.test(msg)) return json(401, { error: "Faça login para usar a leitura por foto." });
     return json(/limite/i.test(msg) ? 429 : 403, { error: msg });
   }
 
